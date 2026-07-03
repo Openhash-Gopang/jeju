@@ -100,30 +100,52 @@ const NATIONAL_TABLE = [
     kw: ['지방경찰청', '국가경찰', '112', '고소장', '수사'] },
   { code: 'SP-NAT-LABOR',        file: '09-national/agencies/SP-NAT-LABOR_v1.1.md',
     kw: ['근로복지공단', '산재보험', '산업재해'] },
+  { code: 'SP-NAT-PROSECUTION',  file: '09-national/agencies/SP-NAT-PROSECUTION_v1.1.md',
+    kw: ['검찰청', '고소장', '고발'] },
+  { code: 'SP-NAT-COASTGUARD',   file: '09-national/agencies/SP-NAT-COASTGUARD_v1.1.md',
+    kw: ['해양경찰', '122'] },
+  { code: 'SP-NAT-WEATHER',      file: '09-national/agencies/SP-NAT-WEATHER_v1.1.md',
+    kw: ['기상청', '기상특보', '태풍정보'] },
+  { code: 'SP-NAT-PPS',          file: '09-national/agencies/SP-NAT-PPS_v1.1.md',
+    kw: ['조달청', '나라장터'] },
+  { code: 'SP-NAT-MMA',          file: '09-national/agencies/SP-NAT-MMA_v1.1.md',
+    kw: ['병무청', '징병검사', '입영'] },
+  { code: 'SP-NAT-VETERANS',     file: '09-national/agencies/SP-NAT-VETERANS_v1.1.md',
+    kw: ['보훈청', '국가유공자', '보훈급여'] },
+  { code: 'SP-NAT-LABORREL',     file: '09-national/agencies/SP-NAT-LABORREL_v1.1.md',
+    kw: ['노동위원회', '부당해고'] },
+  { code: 'SP-NAT-PROBATION',    file: '09-national/agencies/SP-NAT-PROBATION_v1.1.md',
+    kw: ['보호관찰', '준법지원센터', '사회봉사명령'] },
+  { code: 'SP-NAT-ANIMALQUARANTINE', file: '09-national/agencies/SP-NAT-ANIMALQUARANTINE_v1.1.md',
+    kw: ['동물검역', '가축검역', '반려동물 검역'] },
+  { code: 'SP-NAT-HUMANQUARANTINE',  file: '09-national/agencies/SP-NAT-HUMANQUARANTINE_v1.1.md',
+    kw: ['검역소', '해외감염병'] },
+  { code: 'SP-NAT-AGROQUALITY',  file: '09-national/agencies/SP-NAT-AGROQUALITY_v1.1.md',
+    kw: ['농산물품질관리원', '원산지표시', '친환경인증'] },
+  { code: 'SP-NAT-FISHQUALITY',  file: '09-national/agencies/SP-NAT-FISHQUALITY_v1.1.md',
+    kw: ['수산물품질관리원'] },
+  { code: 'SP-NAT-FOODIMPORT',   file: '09-national/agencies/SP-NAT-FOODIMPORT_v1.1.md',
+    kw: ['수입식품검사'] },
+  { code: 'SP-NAT-DATA',         file: '09-national/agencies/SP-NAT-DATA_v1.1.md',
+    kw: ['공공데이터청', '공공데이터포털'] },
+  { code: 'SP-NAT-RADIO',        file: '09-national/agencies/SP-NAT-RADIO_v1.1.md',
+    kw: ['전파관리소', '무선국'] },
+  { code: 'SP-NAT-ENV',          file: '09-national/agencies/SP-NAT-ENV_v1.1.md',
+    kw: ['영산강유역환경청', '환경영향평가'] },
+  { code: 'SP-NAT-LABORIMPROVE', file: '09-national/agencies/SP-NAT-LABORIMPROVE_v1.1.md',
+    kw: ['임금체불', '근로개선지도'] },
+  { code: 'SP-NAT-INTERNET',     file: '09-national/agencies/SP-NAT-INTERNET_v1.1.md',
+    kw: ['스마트쉼센터', '인터넷과의존', '스마트폰과의존'] },
+  { code: 'SP-NAT-AIRPORT',      file: '09-national/agencies/SP-NAT-AIRPORT_v1.1.md',
+    kw: ['공항공사', '제주국제공항 운영', '항공편', '제주공항', '비행기 출발', '비행기 도착', '공항 주차장'] },
+  { code: 'SP-NAT-PORT',         file: '09-national/agencies/SP-NAT-PORT_v1.1.md',
+    kw: ['해양수산청', '선박등록', '해상교통관제'] },
 ];
 
 // ── 카탈로그 등록만 되고 개별 SP는 아직 없는 국가기관 (§4 공통 폴백) ──
-// jeju-national-agency-catalog.md §A/§B 기준. 매칭되면 JEJU-NATIONAL-SP §4
-// 형식으로 즉석 안내하고, 지어내지 않는다(간단한 카탈로그 수준 정보만).
-const CATALOG_ONLY = [
-  { kw: ['검찰청'], name: '제주지방검찰청', ministry: '법무부(대검찰청)', brief: '공소 제기, 수사 지휘' },
-  { kw: ['해양경찰'], name: '제주해양경찰서', ministry: '해양경찰청', brief: '해상 치안, 해양사고 구조(122)' },
-  { kw: ['기상청', '기상특보'], name: '제주지방기상청', ministry: '기상청', brief: '기상특보·예보' },
-  { kw: ['조달청'], name: '제주지방조달청', ministry: '조달청', brief: '공공기관 물품·시설공사 조달' },
-  { kw: ['병무청', '징병검사', '입영'], name: '제주지방병무청', ministry: '병무청', brief: '징병검사·입영·병역판정' },
-  { kw: ['보훈청', '국가유공자'], name: '제주보훈청', ministry: '국가보훈부', brief: '국가유공자 등록·보훈급여' },
-  { kw: ['노동위원회', '부당해고'], name: '제주지방노동위원회', ministry: '고용노동부', brief: '노동쟁의 조정, 부당해고 구제신청' },
-  { kw: ['보호관찰', '준법지원센터'], name: '제주준법지원센터', ministry: '법무부', brief: '보호관찰, 사회봉사·수강명령 집행' },
-  { kw: ['임금체불', '근로개선지도'], name: '광주지방고용노동청 제주근로개선지도센터', ministry: '고용노동부', brief: '근로기준법 위반 신고, 임금체불 진정' },
-  { kw: ['검역소', '해외감염병'], name: '국립제주검역소', ministry: '질병관리청', brief: '해외 유입 감염병 검역' },
-  { kw: ['농산물품질관리원', '원산지표시'], name: '국립농산물품질관리원 제주지원', ministry: '농림축산식품부', brief: '농산물 원산지 표시 단속·인증' },
-  { kw: ['수산물품질관리원'], name: '국립수산물품질관리원 제주지원', ministry: '해양수산부', brief: '수산물 원산지·품질 관리' },
-  { kw: ['수입식품검사'], name: '광주지방식품의약품안전청 제주수입식품검사소', ministry: '식품의약품안전처', brief: '수입식품 검사' },
-  { kw: ['전파관리소', '무선국'], name: '제주전파관리소', ministry: '과학기술정보통신부', brief: '전파 혼신 조사, 무선국 검사' },
-  { kw: ['공항공사', '제주국제공항 운영'], name: '한국공항공사 제주공항', ministry: '국토교통부 산하 공기업', brief: '제주국제공항 시설 운영' },
-  { kw: ['해양수산청', '항만'], name: '제주지방해양수산청', ministry: '해양수산부', brief: '항만 시설·선박 등록(국가 관리 항만)' },
-  { kw: ['스마트쉼센터', '인터넷과의존'], name: '한국지능정보사회진흥원 제주스마트쉼센터', ministry: '과학기술정보통신부/행정안전부', brief: '인터넷·스마트폰 과의존 상담' },
-];
+// v1.2: 28개 전 기관 SP 작성 완료로 이 목록은 현재 비어 있다. 향후 카탈로그에
+// 새 기관이 추가되고 SP가 아직 없을 때를 위해 매커니즘은 유지한다.
+const CATALOG_ONLY = [];
 
 function _matchNational(text) {
   return _scoreMatch(text, NATIONAL_TABLE);
