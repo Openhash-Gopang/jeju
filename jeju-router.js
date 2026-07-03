@@ -26,7 +26,7 @@ async function _fetchText(path) {
 }
 
 async function _loadGovCommon() {
-  if (!_govCommon) _govCommon = await _fetchText('00-common/JEJU-GOV-COMMON_v1_4.md');
+  if (!_govCommon) _govCommon = await _fetchText('00-common/JEJU-GOV-COMMON_v1_5.md');
   return _govCommon;
 }
 async function _loadDoSp() {
@@ -333,7 +333,7 @@ export async function assembleJejuSystemPrompt(userText, pdvLocationHint = null,
 
   // -1) 응급 감지 — 다른 모든 매칭·분류보다 먼저, 무조건 최우선.
   if (_isEmergency(text)) {
-    const emergencySp = await _fetchText('06-expert/SP-EXP-EMERGENCY_v1.0.md');
+    const emergencySp = await _fetchText('06-expert/SP-EXP-EMERGENCY_v1.1.md');
     parts.push(emergencySp);
     return {
       systemPrompt: parts.join('\n\n---\n\n'),
