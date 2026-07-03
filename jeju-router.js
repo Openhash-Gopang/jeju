@@ -312,6 +312,15 @@ function _renderEmdTemplate(template, rec) {
     + (linkedRows ? `\n\n### 렌더링된 연계 업무\n| 업무영역 | 실질 처리 주체 | 연결 SP |\n|---|---|---|\n${linkedRows}` : '');
 }
 
+// ── 응급 즉시 처리 (사고실험 2차 §3 권고 — 최우선, 다른 어떤 매칭보다 먼저) ──
+// 분류 LLM 호출조차 기다리게 하면 안 되는 영역이라 순수 정규식으로만 판단하고,
+// 애매하면 응급 쪽으로 분류한다(오탐 비용 < 누락 비용, SP-EXP-EMERGENCY §6).
+const EMERGENCY_RE = /불\s*이?\s*났|불났|화재|가스.{0,4}(냄새|새는|누출|샌다)|쓰러지|심정지|의식.{0,3}없|숨.{0,3}(안\s*쉬|못\s*쉬)|피.{0,6}흘리|물에\s*빠|익수|침수|물이\s*차오|바다.{0,10}(안\s*보여|사라)|실종|없어졌어요|길을\s*잃|협박|스토킹|납치|칼을\s*들고|흉기|자해|자살|치인|치였|교통사고|지진|흔들려요|무너질|무너지|붕괴|침입했|낯선\s*사람.{0,6}(들어|침입)/;
+
+function _isEmergency(text) {
+  return EMERGENCY_RE.test(text);
+}
+
 // ── 메인 진입점 ──────────────────────────────────────────────────
 // userText: 사용자 발화(또는 GWP ctx로 넘어온 최초 요청 텍스트)
 // pdvLocationHint: PDV에 저장된 거주 읍면동(있으면 우선 참조, JEJU-GOV-COMMON §2)
@@ -321,6 +330,16 @@ export async function assembleJejuSystemPrompt(userText, pdvLocationHint = null,
   const text = userText || '';
   const trace = ['JEJU-GOV-COMMON'];
   const parts = [govCommon];
+
+  // -1) 응급 감지 — 다른 모든 매칭·분류보다 먼저, 무조건 최우선.
+  if (_isEmergency(text)) {
+    const emergencySp = await _fetchText('06-expert/SP-EXP-EMERGENCY_v1.0.md');
+    parts.push(emergencySp);
+    return {
+      systemPrompt: parts.join('\n\n---\n\n'),
+      trace: ['JEJU-GOV-COMMON', 'SP-EXP-EMERGENCY', '(응급 감지 — 최우선 즉시 처리)'],
+    };
+  }
 
   // 0) 국가기관 매칭 — JEJU-DO-SP(도청 트리)와 배타적인 형제 노드.
   //    매칭되면 도청 트리는 아예 로드하지 않는다(JEJU-NATIONAL-SP §0).
