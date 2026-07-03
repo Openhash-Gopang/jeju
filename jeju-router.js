@@ -26,7 +26,7 @@ async function _fetchText(path) {
 }
 
 async function _loadGovCommon() {
-  if (!_govCommon) _govCommon = await _fetchText('00-common/JEJU-GOV-COMMON_v1_2.md');
+  if (!_govCommon) _govCommon = await _fetchText('00-common/JEJU-GOV-COMMON_v1_3.md');
   return _govCommon;
 }
 async function _loadDoSp() {
