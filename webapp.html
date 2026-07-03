@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#ffffff">
+<title>제주도청 AI</title>
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pretendard:wght@400;500;600;700;800&display=swap">
+<script src="/gopang-wallet.js"></script>
+<script type="module" src="https://hondi.net/auth/subsystem-auth.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;height:100dvh;overflow:hidden;
+  font-family:'Pretendard',-apple-system,'Helvetica Neue',sans-serif;
+  font-size:15px;background:#fff;color:#111;-webkit-font-smoothing:antialiased}
+:root{
+  --sky:#0a7a4a;--sky-lt:#e6f4ec;--sky-dk:#075c37;
+  --border:#e5e7eb;--txt2:#6b7280;--txt3:#9ca3af;
+  --chip-bg:#f3f4f6;--chip-border:#e5e7eb;
+  --safe-t:env(safe-area-inset-top,0px);
+  --safe-b:env(safe-area-inset-bottom,0px);
+}
+.app{display:flex;flex-direction:column;height:100%;height:100dvh;max-width:480px;margin:0 auto;background:#fff}
+.topbar{display:flex;align-items:center;justify-content:space-between;
+  padding:calc(var(--safe-t) + 12px) 16px 12px;
+  border-bottom:1px solid var(--border);flex-shrink:0;background:#fff}
+.topbar-left{display:flex;align-items:center;gap:8px}
+.topbar-icon{width:28px;height:28px;background:var(--sky);border-radius:7px;
+  display:flex;align-items:center;justify-content:center;color:#fff;font-size:14px;font-weight:800}
+.topbar-name{font-size:15px;font-weight:800;color:#111;letter-spacing:-.3px}
+.topbar-right{display:flex;align-items:center;gap:6px}
+.auth-badge{font-size:11px;font-weight:700;padding:3px 9px;border-radius:20px;
+  background:var(--chip-bg);color:var(--txt2);border:1px solid var(--chip-border);display:none}
+.trace-badge{font-size:10px;color:var(--txt3);padding:2px 8px;display:none}
+
+.chat-screen{display:flex;flex-direction:column;flex:1;overflow:hidden}
+.chat-body{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;
+  padding:0 16px 12px;display:flex;flex-direction:column;gap:10px;background:#fff}
+
+.intro-section{display:flex;flex-direction:column;align-items:center;padding:36px 0 28px;gap:14px}
+.intro-icon{width:64px;height:64px;border-radius:18px;background:var(--sky);
+  display:flex;align-items:center;justify-content:center;
+  box-shadow:0 8px 24px rgba(10,122,74,.25);color:#fff;font-size:28px;font-weight:800}
+.intro-title{font-size:20px;font-weight:800;color:#111;letter-spacing:-.4px;text-align:center}
+.intro-sub{font-size:14px;color:var(--txt2);line-height:1.6;text-align:center}
+
+.chip-row{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;padding:0 4px}
+.chip{display:inline-flex;align-items:center;gap:5px;padding:8px 14px;border-radius:20px;
+  background:#fff;border:1.5px solid var(--chip-border);
+  font-size:13px;font-weight:600;color:#374151;cursor:pointer;
+  transition:border-color .12s,background .12s,color .12s;white-space:nowrap}
+.chip:hover,.chip:active{background:var(--sky-lt);border-color:var(--sky);color:var(--sky-dk)}
+
+.b-ai{max-width:88%;align-self:flex-start;background:#f9fafb;border:1px solid var(--border);
+  border-radius:4px 16px 16px 16px;padding:10px 14px;font-size:14px;line-height:1.7;color:#111;
+  box-shadow:0 1px 2px rgba(0,0,0,.04)}
+.b-user{max-width:88%;align-self:flex-end;background:var(--sky);color:#fff;
+  border-radius:16px 16px 4px 16px;padding:10px 14px;font-size:14px;line-height:1.7}
+.b-trace{font-size:10px;color:var(--txt3);align-self:flex-start;padding:0 4px;font-family:monospace}
+
+.chat-input-area{background:#fff;border-top:1px solid var(--border);
+  padding:10px 12px calc(10px + var(--safe-b));
+  display:flex;gap:8px;align-items:flex-end;flex-shrink:0}
+.chat-textarea{flex:1;background:#f3f4f6;border:1.5px solid transparent;border-radius:22px;
+  padding:10px 16px;font-family:'Pretendard',sans-serif;font-size:14px;
+  resize:none;outline:none;max-height:100px;line-height:1.5;
+  transition:border-color .15s,background .15s;color:#111}
+.chat-textarea::placeholder{color:var(--txt3)}
+.chat-textarea:focus{border-color:var(--sky);background:#fff}
+.chat-send-btn{width:40px;height:40px;border-radius:50%;background:var(--sky);
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;border:none;cursor:pointer;
+  transition:background .12s;color:#fff}
+.chat-send-btn:disabled{background:#bae6d0;cursor:not-allowed}
+
+.toast{position:fixed;bottom:calc(80px + var(--safe-b));left:50%;transform:translateX(-50%) translateY(10px);
+  background:#111;color:#fff;border-radius:10px;padding:10px 18px;font-size:13px;font-weight:500;
+  z-index:9999;opacity:0;transition:all .25s;white-space:nowrap}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <div class="topbar">
+    <div class="topbar-left">
+      <div class="topbar-icon">濟</div>
+      <span class="topbar-name">제주도청 AI</span>
+    </div>
+    <div class="topbar-right">
+      <span class="trace-badge" id="trace-badge"></span>
+      <span class="auth-badge" id="auth-badge">L0</span>
+    </div>
+  </div>
+
+  <div class="chat-screen" id="chat-screen">
+    <div class="chat-body" id="mob-chat-body">
+
+      <div class="intro-section" id="intro-section">
+        <div class="intro-icon">濟</div>
+        <div>
+          <div class="intro-title">제주도청 · 시청 · 읍면동 AI</div>
+          <div class="intro-sub" style="margin-top:6px">복지 · 세정 · 건축 · 상하수도 · 농업 등<br>제주 행정 관련 무엇이든 물어보세요.</div>
+        </div>
+        <div class="chip-row">
+          <button class="chip" onclick="qs('한림읍 수돗물에서 냄새가 나요')">상하수도 민원</button>
+          <button class="chip" onclick="qs('기초생활수급 신청하려면 어디로 가야 하나요')">복지 안내</button>
+          <button class="chip" onclick="qs('고향사랑기부금 얼마까지 세액공제 되나요')">고향사랑기부</button>
+          <button class="chip" onclick="qs('건축허가 신청은 어디서 하나요')">건축 인허가</button>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="chat-input-area">
+      <textarea class="chat-textarea" id="mob-input" rows="1" placeholder="무엇을 도와드릴까요?"
+        oninput="autoResize(this);updateSendBtn()"
+        onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();mobSend();}"></textarea>
+      <button class="chat-send-btn" id="mob-send-btn" disabled onclick="mobSend()">↑</button>
+    </div>
+  </div>
+
+</div>
+<div class="toast" id="mob-toast"></div>
+
+<script type="module">
+import { assembleJejuSystemPrompt } from '/jeju-router.js';
+window._assembleJejuSystemPrompt = assembleJejuSystemPrompt;
+</script>
+
+<script>
+// ── 상수 ──────────────────────────────────────────────────────
+const PROXY = 'https://gopang-proxy.tensor-city.workers.dev';
+const SP_FALLBACK = `당신은 제주특별자치도청 AI입니다. 아직 라우터 로드에 실패해 도메인 특화 SP 없이
+일반 지식으로만 응답 중임을 사용자에게 알리고, 정확한 안내는 제주콜센터(064-120)를 권장하세요.`;
+
+// ── PDV 거주지 힌트(있으면) ───────────────────────────────────
+function _pdvLocationHint() {
+  try {
+    const p = JSON.parse(localStorage.getItem('gopang_user_v4') || sessionStorage.getItem('gopang_user_v4') || 'null');
+    return p?.address || p?.location || null;
+  } catch { return null; }
+}
+
+// ── AI 호출 (라우터로 SP 동적 조립) ─────────────────────────────
+async function callAI(messages, latestUserText) {
+  let sp = SP_FALLBACK, trace = [];
+  try {
+    const r = await window._assembleJejuSystemPrompt(latestUserText, _pdvLocationHint());
+    sp = r.systemPrompt;
+    trace = r.trace;
+  } catch (e) {
+    console.warn('[Jeju] SP 조립 실패, 폴백 사용:', e.message);
+  }
+  document.getElementById('trace-badge').textContent = trace.join(' > ');
+  document.getElementById('trace-badge').style.display = trace.length ? 'inline-block' : 'none';
+
+  try {
+    const r = await fetch(`${PROXY}/ai/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ provider:'deepseek', model:'deepseek-chat', system:sp, messages, max_tokens:2000 }),
+    });
+    if (!r.ok) throw new Error(`proxy ${r.status}`);
+    const d = await r.json();
+    return { text: d.content || '잠시 후 다시 시도해 주세요.', trace };
+  } catch(e) {
+    console.warn('[Jeju] DeepSeek 폴백 → Claude:', e.message);
+    const r2 = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model:'claude-sonnet-4-20250514', max_tokens:1000, system:sp, messages:messages.slice(-8) }),
+    });
+    const d2 = await r2.json();
+    return { text: d2.content?.find(c => c.type === 'text')?.text || '오류가 발생했습니다.', trace };
+  }
+}
+
+// ── UI 헬퍼 ───────────────────────────────────────────────────
+function autoResize(el) { el.style.height = 'auto'; el.style.height = Math.min(el.scrollHeight, 100) + 'px'; }
+function updateSendBtn() {
+  const btn = document.getElementById('mob-send-btn');
+  if (btn) btn.disabled = !document.getElementById('mob-input').value.trim();
+}
+
+let hist = [];
+let mc = 0;
+
+function hideIntro() {
+  const intro = document.getElementById('intro-section');
+  if (intro) intro.style.display = 'none';
+}
+
+async function mobSend() {
+  const inp = document.getElementById('mob-input');
+  const msg = inp.value.trim();
+  if (!msg) return;
+  inp.value = '';
+  autoResize(inp);
+  updateSendBtn();
+  hideIntro();
+  addMob(msg, 'user');
+  hist.push({ role:'user', content:msg });
+  const btn = document.getElementById('mob-send-btn');
+  btn.disabled = true;
+  const tid = addMob('…', 'ai');
+  try {
+    const { text, trace } = await callAI(hist.slice(-10), msg);
+    document.getElementById(tid)?.remove();
+    addMob(text, 'ai');
+    if (trace?.length) addTrace(trace.join(' → '));
+    hist.push({ role:'assistant', content:text });
+    _recordPdv(msg, trace);
+  } catch (e) {
+    document.getElementById(tid)?.remove();
+    addMob('오류가 발생했습니다. 다시 시도해 주세요.', 'ai');
+  }
+  btn.disabled = false;
+}
+
+function addMob(text, type) {
+  const id = 'mb' + (mc++);
+  const body = document.getElementById('mob-chat-body');
+  const d = document.createElement('div');
+  d.id = id;
+  d.className = type === 'user' ? 'b-user' : 'b-ai';
+  d.innerHTML = text.replace(/\n/g, '<br>');
+  body.appendChild(d);
+  body.scrollTop = body.scrollHeight;
+  return id;
+}
+function addTrace(text) {
+  const body = document.getElementById('mob-chat-body');
+  const d = document.createElement('div');
+  d.className = 'b-trace';
+  d.textContent = '[SP_CHAIN] ' + text;
+  body.appendChild(d);
+  body.scrollTop = body.scrollHeight;
+}
+
+function qs(s) {
+  document.getElementById('mob-input').value = s;
+  updateSendBtn();
+  mobSend();
+}
+function toast(msg) {
+  const t = document.getElementById('mob-toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+// ── PDV 표준 payload ───────────────────────────────────────────
+function _recordPdv(userMsg, trace) {
+  try {
+    const token = JSON.parse(sessionStorage.getItem('gopang_sso_token') || '{}');
+    const user_guid = token.ipv6 || 'anonymous';
+    fetch(`${PROXY}/pdv_log`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        user_guid,
+        source: 'kjeju',
+        report: {
+          pdv_6w: {
+            who:   user_guid,
+            when:  new Date().toISOString(),
+            where: window._gopangLocation || '위치 미확인',
+            what:  '제주도청 AI 채팅',
+            how:   `민원: ${userMsg.slice(0, 60)} / 체인: ${(trace||[]).join('>')}`,
+            why:   '제주 지방행정 안내',
+          },
+        },
+      }),
+    }).catch(() => {});
+  } catch(e) { console.warn('[PDV]', e.message); }
+}
+
+// ── ctx_enc=b64 분기 (GWP 새 탭 진입 시 원 질문 자동 전달) ─────
+(function initCtx() {
+  const params = new URLSearchParams(location.search);
+  const ctxRaw = params.get('ctx') || '';
+  const ctxEnc = params.get('ctx_enc');
+  const ctx = ctxRaw
+    ? (ctxEnc === 'b64'
+        ? decodeURIComponent(escape(atob(ctxRaw)))
+        : decodeURIComponent(ctxRaw))
+    : null;
+  if (ctx) setTimeout(() => qs(ctx), 300);
+})();
+</script>
+
+<script>
+/* ── 고팡 SSO 인증 콜백 ── */
+window._onGopangAuth = function(user) {
+  if (!user) return;
+  const badge = document.getElementById('auth-badge');
+  if (badge) { badge.textContent = 'Lv.' + (user.level || 0); badge.style.display = 'inline-block'; }
+  try { sessionStorage.setItem('gopang_sso_token', JSON.stringify(user)); } catch(e) {}
+  console.log('[Jeju] ✅ 인증 완료 —', user.level, user.ipv6?.slice(-8));
+};
+</script>
+</body>
+</html>
