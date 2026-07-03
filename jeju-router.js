@@ -101,11 +101,11 @@ const NATIONAL_TABLE = [
   { code: 'SP-NAT-LABOR',        file: '09-national/agencies/SP-NAT-LABOR_v1.1.md',
     kw: ['근로복지공단', '산재보험', '산업재해'] },
   { code: 'SP-NAT-PROSECUTION',  file: '09-national/agencies/SP-NAT-PROSECUTION_v1.1.md',
-    kw: ['검찰청', '고소장', '고발'] },
+    kw: ['검찰청', '고소장', '고발', '공소', '검사실'] },
   { code: 'SP-NAT-COASTGUARD',   file: '09-national/agencies/SP-NAT-COASTGUARD_v1.1.md',
-    kw: ['해양경찰', '122'] },
+    kw: ['해양경찰', '122', '해양사고', '해양레저 안전'] },
   { code: 'SP-NAT-WEATHER',      file: '09-national/agencies/SP-NAT-WEATHER_v1.1.md',
-    kw: ['기상청', '기상특보', '태풍정보'] },
+    kw: ['기상청', '기상특보', '태풍정보', '태풍 정보', '실시간 기상'] },
   { code: 'SP-NAT-PPS',          file: '09-national/agencies/SP-NAT-PPS_v1.1.md',
     kw: ['조달청', '나라장터'] },
   { code: 'SP-NAT-MMA',          file: '09-national/agencies/SP-NAT-MMA_v1.1.md',
@@ -117,15 +117,15 @@ const NATIONAL_TABLE = [
   { code: 'SP-NAT-PROBATION',    file: '09-national/agencies/SP-NAT-PROBATION_v1.1.md',
     kw: ['보호관찰', '준법지원센터', '사회봉사명령'] },
   { code: 'SP-NAT-ANIMALQUARANTINE', file: '09-national/agencies/SP-NAT-ANIMALQUARANTINE_v1.1.md',
-    kw: ['동물검역', '가축검역', '반려동물 검역'] },
+    kw: ['동물검역', '가축검역', '반려동물 검역', '반려동물 동반', '축산물 반입'] },
   { code: 'SP-NAT-HUMANQUARANTINE',  file: '09-national/agencies/SP-NAT-HUMANQUARANTINE_v1.1.md',
-    kw: ['검역소', '해외감염병'] },
+    kw: ['검역소', '해외감염병', '해외 출국 예방접종', '검역감염병'] },
   { code: 'SP-NAT-AGROQUALITY',  file: '09-national/agencies/SP-NAT-AGROQUALITY_v1.1.md',
-    kw: ['농산물품질관리원', '원산지표시', '친환경인증'] },
+    kw: ['농산물품질관리원', '원산지표시', '친환경인증', '친환경 인증', 'GAP 인증'] },
   { code: 'SP-NAT-FISHQUALITY',  file: '09-national/agencies/SP-NAT-FISHQUALITY_v1.1.md',
-    kw: ['수산물품질관리원'] },
+    kw: ['수산물품질관리원', '수산물 원산지', '수산물 검사'] },
   { code: 'SP-NAT-FOODIMPORT',   file: '09-national/agencies/SP-NAT-FOODIMPORT_v1.1.md',
-    kw: ['수입식품검사'] },
+    kw: ['수입식품검사', '수입식품 통관'] },
   { code: 'SP-NAT-DATA',         file: '09-national/agencies/SP-NAT-DATA_v1.1.md',
     kw: ['공공데이터청', '공공데이터포털'] },
   { code: 'SP-NAT-RADIO',        file: '09-national/agencies/SP-NAT-RADIO_v1.1.md',
@@ -137,7 +137,7 @@ const NATIONAL_TABLE = [
   { code: 'SP-NAT-INTERNET',     file: '09-national/agencies/SP-NAT-INTERNET_v1.1.md',
     kw: ['스마트쉼센터', '인터넷과의존', '스마트폰과의존'] },
   { code: 'SP-NAT-AIRPORT',      file: '09-national/agencies/SP-NAT-AIRPORT_v1.1.md',
-    kw: ['공항공사', '제주국제공항 운영', '항공편', '제주공항', '비행기 출발', '비행기 도착', '공항 주차장'] },
+    kw: ['공항공사', '제주국제공항 운영', '항공편', '제주공항', '비행기 출발', '비행기 도착', '공항 주차장', '공항 이용', '공항 분실물'] },
   { code: 'SP-NAT-PORT',         file: '09-national/agencies/SP-NAT-PORT_v1.1.md',
     kw: ['해양수산청', '선박등록', '해상교통관제'] },
 ];
@@ -160,6 +160,87 @@ function _renderCatalogFallback(c) {
   return `[JEJU-NATIONAL-SP §4 공통 폴백]\n` +
     `${c.name}은(는) ${c.ministry}의 제주 지역 사무소로, 아직 이 SP가 상세 안내를 갖추지 못했습니다. ` +
     `${c.brief}을(를) 담당하며, 정확한 절차는 해당 기관 홈페이지 또는 정부24(gov.kr)에서 확인하시는 것을 권장합니다.`;
+}
+
+// ── LLM 기반 분류 폴백 (v1.2 신설) ──────────────────────────────
+// 키워드 매칭은 빠르지만 "청년 월세 지원 있어요?"처럼 용건만 있고 고유
+//명사가 없는 자연어, "자치경찰이랑 일반경찰 차이가 뭐예요" 같은 비교·설명
+// 질문에는 원천적으로 약하다(사고실험에서 확인됨). 정규식을 계속 추가하는
+// 두더지 잡기 대신, 키워드 매칭이 전부 실패했을 때만 LLM 자체에게 "이 43개
+// 코드 중 뭐가 맞는지, 또는 특정 기관 없이 답할 수 있는 질문인지" 분류를
+// 맡긴다 — 비용은 매칭 실패 시에만 발생(정상 케이스는 기존처럼 무료·즉시).
+const ROUTE_DESCRIPTIONS = {
+  'SP-DO-PLAN': '기획조정실 [지방세는 여기, 국세는 SP-NAT-TAX]',
+  'SP-DO-SAFETY': '도민안전건강실(안전건강실)',
+  'SP-DO-JACHI': '특별자치행정국 [제도 설명용 — 실제 자치경찰 사무는 SP-AGY-POLICE]',
+  'SP-DO-ECON': '경제활력국',
+  'SP-DO-INNOV': '혁신산업국',
+  'SP-DO-WELFARE': '복지가족국(구 보건복지여성국)',
+  'SP-DO-CLIMATE': '기후환경국',
+  'SP-DO-HOUSING': '건설주택국',
+  'SP-DO-TRANSPORT': '교통항공국',
+  'SP-DO-CULTURE': '문화체육교육국',
+  'SP-DO-TOURISM': '관광교류국',
+  'SP-DO-AGRI': '농축산식품국',
+  'SP-DO-OCEAN': '해양수산국',
+  'SP-NAT-TAX': '제주세무서(국세청) [국세 — 지방세 아님]',
+  'SP-NAT-COURT': '제주지방법원(법원행정처(사법부)) [실제 재판 절차 — K-Law(AI 판결 시뮬레이션)와 다름]',
+  'SP-NAT-NPS': '국민연금공단 제주지역본부(보건복지부)',
+  'SP-NAT-NHIS': '국민건강보험공단 제주지사(보건복지부)',
+  'SP-NAT-IMMIGRATION': '제주출입국·외국인청(법무부)',
+  'SP-NAT-POST': '제주지방우정청(우정사업본부(과학기술정보통신부))',
+  'SP-NAT-POLICE': '제주지방경찰청(경찰청(국가경찰)) [국가경찰 — 형사·수사 전반]',
+  'SP-NAT-LABOR': '근로복지공단 제주지사(고용노동부)',
+  'SP-NAT-PROSECUTION': '제주지방검찰청(법무부(대검찰청)) [검찰 — 공소·기소. 경찰과 다름]',
+  'SP-NAT-COASTGUARD': '제주해양경찰서(해양경찰청)',
+  'SP-NAT-WEATHER': '제주지방기상청(기상청)',
+  'SP-NAT-PPS': '제주지방조달청(조달청)',
+  'SP-NAT-MMA': '제주지방병무청(병무청)',
+  'SP-NAT-VETERANS': '제주보훈청(국가보훈부)',
+  'SP-NAT-LABORREL': '제주지방노동위원회(고용노동부)',
+  'SP-NAT-PROBATION': '제주준법지원센터(법무부(범죄예방정책국))',
+  'SP-NAT-ANIMALQUARANTINE': '농림축산검역본부 제주지역본부(농림축산식품부)',
+  'SP-NAT-HUMANQUARANTINE': '국립제주검역소(질병관리청)',
+  'SP-NAT-AGROQUALITY': '국립농산물품질관리원 제주지원(농림축산식품부)',
+  'SP-NAT-FISHQUALITY': '국립수산물품질관리원 제주지원(해양수산부)',
+  'SP-NAT-FOODIMPORT': '광주지방식품의약품안전청 제주수입식품검사소(식품의약품안전처)',
+  'SP-NAT-DATA': '호남지방데이터청 제주사무소(국가데이터처)',
+  'SP-NAT-RADIO': '제주전파관리소(과학기술정보통신부)',
+  'SP-NAT-ENV': '영산강유역환경청 제주주재사무실(기후에너지환경부)',
+  'SP-NAT-LABORIMPROVE': '광주지방고용노동청 제주근로개선지도센터(고용노동부)',
+  'SP-NAT-INTERNET': '한국지능정보사회진흥원 제주스마트쉼센터(과학기술정보통신부/행정안전부)',
+  'SP-NAT-AIRPORT': '한국공항공사 제주공항(국토교통부 산하 공기업)',
+  'SP-NAT-PORT': '제주지방해양수산청(해양수산부)',
+  'SP-CITY-JEJU': '제주시청',
+  'SP-CITY-SEOGWIPO': '서귀포시청',
+};
+
+function _findTableEntry(code) {
+  return NATIONAL_TABLE.find(e => e.code === code)
+    || L2_TABLE.find(e => e.code === code)
+    || CITY_TABLE.find(e => e.code === code)
+    || null;
+}
+
+function _isNationalCode(code) {
+  return NATIONAL_TABLE.some(e => e.code === code);
+}
+
+// classifyFn: async (text, candidatesText) => 'SP-XXX-YYY' | 'NONE' | null
+// webapp.html이 실제 LLM 호출로 구현해서 주입한다(라우터 자체는 네트워크 호출을
+// 안 한다 — 기존 구조 유지). 주입 안 하면 그냥 기존처럼 무매칭으로 끝난다.
+async function _classifyFallback(text, classifyFn) {
+  if (!classifyFn) return null;
+  const candidatesText = Object.entries(ROUTE_DESCRIPTIONS)
+    .map(([code, d]) => `${code}: ${d}`).join('\n');
+  try {
+    const code = await classifyFn(text, candidatesText);
+    if (!code || code === 'NONE' || !ROUTE_DESCRIPTIONS[code]) return null;
+    return code;
+  } catch (e) {
+    console.warn('[Jeju] LLM 분류 폴백 실패:', e.message);
+    return null;
+  }
 }
 
 // ── EMD 데이터 로드 (한림 + 나머지 42개 병합) ───────────────────
@@ -235,7 +316,7 @@ function _renderEmdTemplate(template, rec) {
 // userText: 사용자 발화(또는 GWP ctx로 넘어온 최초 요청 텍스트)
 // pdvLocationHint: PDV에 저장된 거주 읍면동(있으면 우선 참조, JEJU-GOV-COMMON §2)
 // 반환: { systemPrompt, trace } — trace는 디버깅/로그용 체인 경로
-export async function assembleJejuSystemPrompt(userText, pdvLocationHint = null) {
+export async function assembleJejuSystemPrompt(userText, pdvLocationHint = null, classifyFn = null) {
   const govCommon = await _loadGovCommon();
   const text = userText || '';
   const trace = ['JEJU-GOV-COMMON'];
@@ -329,8 +410,42 @@ export async function assembleJejuSystemPrompt(userText, pdvLocationHint = null)
     return { systemPrompt: parts.join('\n\n---\n\n'), trace };
   }
 
-  // 5) 아무 것도 안 걸리면 도청 공통 레이어만(§2: 개요·안내 수준으로 직접 답)
-  trace.push('(L2 미매칭 — 공통 레이어가 일반 안내만 제공)');
+  // 5) 키워드 매칭 전부 실패 — LLM 분류 폴백 시도 (classifyFn 주입된 경우만).
+  // "청년 월세 지원 있어요?"처럼 고유명사 없는 용건형 질문, "자치경찰이랑
+  // 일반경찰 차이가 뭐예요"처럼 비교·설명형 질문은 정규식으로 못 잡는다 —
+  // 여기서 LLM 자신에게 43개 코드 중 하나를 고르거나 NONE(=이 GOV-COMMON
+  // 레이어 지식만으로 답 가능)을 판단하게 한다.
+  const classified = await _classifyFallback(text, classifyFn);
+  if (classified) {
+    if (_isNationalCode(classified)) {
+      // 이미 parts에 SP-DO-000이 들어가 있으므로, 도청 트리를 걷어내고
+      // 국가기관 트리로 다시 시작한다(JEJU-NATIONAL-SP §0: 배타적 형제 노드).
+      const nationalOnlyParts = [govCommon];
+      const nationalSp = await _loadNationalSp();
+      nationalOnlyParts.push(nationalSp);
+      const entry = _findTableEntry(classified);
+      const agencyText = await _fetchText(entry.file);
+      nationalOnlyParts.push(agencyText);
+      return {
+        systemPrompt: nationalOnlyParts.join('\n\n---\n\n'),
+        trace: ['JEJU-GOV-COMMON', 'JEJU-NATIONAL-SP', classified, '(LLM 분류 폴백)'],
+      };
+    }
+    const entry = _findTableEntry(classified);
+    if (entry) {
+      const entryText = await _fetchText(entry.file);
+      parts.push(entryText);
+      trace.push(classified, '(LLM 분류 폴백)');
+      await _appendExpertIfMatched();
+      return { systemPrompt: parts.join('\n\n---\n\n'), trace };
+    }
+  }
+
+  // 6) 그래도 안 걸리면(분류 결과 NONE 포함 — 비교·설명형 질문 등)
+  // 도청 공통 레이어만 반환한다. 이건 실패가 아니라, 이런 질문은 원래
+  // 특정 기관 SP 없이도 GOV-COMMON/DO-SP의 배경지식으로 충분히 답할 수
+  // 있는 경우가 많다(예: 자치경찰 vs 국가경찰 차이 설명).
+  trace.push(classifyFn ? '(LLM 분류도 NONE — 공통 레이어 지식으로 답변)' : '(L2 미매칭 — 공통 레이어가 일반 안내만 제공)');
   return { systemPrompt: parts.join('\n\n---\n\n'), trace };
 }
 
