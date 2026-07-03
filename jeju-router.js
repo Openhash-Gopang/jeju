@@ -26,7 +26,7 @@ async function _fetchText(path) {
 }
 
 async function _loadGovCommon() {
-  if (!_govCommon) _govCommon = await _fetchText('00-common/JEJU-GOV-COMMON_v1_1.md');
+  if (!_govCommon) _govCommon = await _fetchText('00-common/JEJU-GOV-COMMON_v1_2.md');
   return _govCommon;
 }
 async function _loadDoSp() {
@@ -43,39 +43,39 @@ async function _loadNationalSp() {
 // 개수가 가장 많이 일치하는 쪽을 우선한다(단순 스코어링 — v1.1에서
 // LLM 기반 분류로 고도화 검토).
 const L2_TABLE = [
-  { code: 'SP-DO-PLAN',     file: '02-do-dept/SP-DO-PLAN_v1.0.md',
+  { code: 'SP-DO-PLAN',     file: '02-do-dept/SP-DO-PLAN_v1.1.md',
     kw: ['기획조정실', '고향사랑기부', '세정', '지방세', '취득세', '재산세', '청년정책', '인구정책', '예산', '기획'] },
-  { code: 'SP-DO-SAFETY',   file: '02-do-dept/SP-DO-SAFETY_v1.0.md',
+  { code: 'SP-DO-SAFETY',   file: '02-do-dept/SP-DO-SAFETY_v1.1.md',
     kw: ['안전건강실', '재난', '태풍', '호우', '보건정책', '감염병', '예방접종', '응급의료', '안전', '재난', '보건'] },
-  { code: 'SP-DO-JACHI',    file: '02-do-dept/SP-DO-JACHI_v1.0.md',
+  { code: 'SP-DO-JACHI',    file: '02-do-dept/SP-DO-JACHI_v1.1.md',
     kw: ['특별자치행정국', '특별자치', '자치분권', '제주특별법'] },
-  { code: 'SP-DO-ECON',     file: '02-do-dept/SP-DO-ECON_v1.0.md',
+  { code: 'SP-DO-ECON',     file: '02-do-dept/SP-DO-ECON_v1.1.md',
     kw: ['경제활력국', '소상공인', '자영업', '중소기업', '일자리', '정책자금', '경제'] },
-  { code: 'SP-DO-INNOV',    file: '02-do-dept/SP-DO-INNOV_v1.0.md',
+  { code: 'SP-DO-INNOV',    file: '02-do-dept/SP-DO-INNOV_v1.1.md',
     kw: ['혁신산업국', '신재생', '풍력', '태양광', '디지털', 'AI산업', '스타트업', '산업'] },
-  { code: 'SP-DO-WELFARE',  file: '02-do-dept/SP-DO-WELFARE_v1.0.md',
+  { code: 'SP-DO-WELFARE',  file: '02-do-dept/SP-DO-WELFARE_v1.1.md',
     kw: ['복지가족국', '보건복지여성국', '기초생활수급', '기초연금', '보육료', '어린이집', '장애인복지', '한부모',
          '복지', '임신', '출산', '육아', '보육', '장애인', '여성가족'] },
-  { code: 'SP-DO-CLIMATE',  file: '02-do-dept/SP-DO-CLIMATE_v1.0.md',
+  { code: 'SP-DO-CLIMATE',  file: '02-do-dept/SP-DO-CLIMATE_v1.1.md',
     kw: ['기후환경국', '전기차', '탄소중립', '환경영향평가', '클린하우스', '분리배출', '폐기물', '환경'] },
-  { code: 'SP-DO-HOUSING',  file: '02-do-dept/SP-DO-HOUSING_v1.0.md',
+  { code: 'SP-DO-HOUSING',  file: '02-do-dept/SP-DO-HOUSING_v1.1.md',
     kw: ['건설주택국', '공공임대주택', '건축허가', '건축인허가', '주택', '건축'] },
-  { code: 'SP-DO-TRANSPORT',file: '02-do-dept/SP-DO-TRANSPORT_v1.0.md',
+  { code: 'SP-DO-TRANSPORT',file: '02-do-dept/SP-DO-TRANSPORT_v1.1.md',
     kw: ['교통항공국', '버스', '준공영제', '교통약자', '콜택시', '공영주차장', '공항', '제2공항', '교통'] },
-  { code: 'SP-DO-CULTURE',  file: '02-do-dept/SP-DO-CULTURE_v1.0.md',
+  { code: 'SP-DO-CULTURE',  file: '02-do-dept/SP-DO-CULTURE_v1.1.md',
     kw: ['문화체육교육국', '생활체육', '평생교육', '평생학습', '문화예술', '체육', '도서관', '문화'] },
-  { code: 'SP-DO-TOURISM',  file: '02-do-dept/SP-DO-TOURISM_v1.0.md',
+  { code: 'SP-DO-TOURISM',  file: '02-do-dept/SP-DO-TOURISM_v1.1.md',
     kw: ['관광교류국', '관광지', '숙박업', '게스트하우스', '여행업', '국제교류', '관광'] },
-  { code: 'SP-DO-AGRI',     file: '02-do-dept/SP-DO-AGRI_v1.0.md',
+  { code: 'SP-DO-AGRI',     file: '02-do-dept/SP-DO-AGRI_v1.1.md',
     kw: ['농축산식품국', '농업경영체', '공익직불금', '농산물재해보험', '축산', '농업', '농사'] },
-  { code: 'SP-DO-OCEAN',    file: '02-do-dept/SP-DO-OCEAN_v1.0.md',
+  { code: 'SP-DO-OCEAN',    file: '02-do-dept/SP-DO-OCEAN_v1.1.md',
     kw: ['해양수산국', '어업면허', '마을어장', '수산업', '양식업', '어업', '수산'] },
 ];
 
 const CITY_TABLE = [
-  { code: 'SP-CITY-JEJU',      file: '04-city/jeju/SP-CITY-JEJU_v1.0.md',
+  { code: 'SP-CITY-JEJU',      file: '04-city/jeju/SP-CITY-JEJU_v1.1.md',
     kw: ['제주시', '제주시청'] },
-  { code: 'SP-CITY-SEOGWIPO',  file: '04-city/seogwipo/SP-CITY-SEOGWIPO_v1.0.md',
+  { code: 'SP-CITY-SEOGWIPO',  file: '04-city/seogwipo/SP-CITY-SEOGWIPO_v1.1.md',
     kw: ['서귀포시', '서귀포시청'] },
 ];
 
@@ -84,21 +84,21 @@ const CITY_TABLE = [
 // 지방세(도청)와 국세(세무서) 혼동 방지를 위해 '세금' 같은 범용어는 넣지
 // 않고, 국가기관임이 분명한 고유명사만 트리거로 쓴다.
 const NATIONAL_TABLE = [
-  { code: 'SP-NAT-TAX',          file: '09-national/agencies/SP-NAT-TAX_v1.0.md',
+  { code: 'SP-NAT-TAX',          file: '09-national/agencies/SP-NAT-TAX_v1.1.md',
     kw: ['세무서', '국세', '종합소득세', '부가가치세', '법인세', '홈택스'] },
-  { code: 'SP-NAT-COURT',        file: '09-national/agencies/SP-NAT-COURT_v1.0.md',
+  { code: 'SP-NAT-COURT',        file: '09-national/agencies/SP-NAT-COURT_v1.1.md',
     kw: ['지방법원', '등기소', '나의사건검색', '전자소송', '등기부등본'] },
-  { code: 'SP-NAT-NPS',          file: '09-national/agencies/SP-NAT-NPS_v1.0.md',
+  { code: 'SP-NAT-NPS',          file: '09-national/agencies/SP-NAT-NPS_v1.1.md',
     kw: ['국민연금'] },
-  { code: 'SP-NAT-NHIS',         file: '09-national/agencies/SP-NAT-NHIS_v1.0.md',
+  { code: 'SP-NAT-NHIS',         file: '09-national/agencies/SP-NAT-NHIS_v1.1.md',
     kw: ['건강보험공단', '건강보험료', '건강검진'] },
-  { code: 'SP-NAT-IMMIGRATION',  file: '09-national/agencies/SP-NAT-IMMIGRATION_v1.0.md',
+  { code: 'SP-NAT-IMMIGRATION',  file: '09-national/agencies/SP-NAT-IMMIGRATION_v1.1.md',
     kw: ['출입국', '외국인청', '체류자격', '비자', '귀화', '하이코리아'] },
-  { code: 'SP-NAT-POST',         file: '09-national/agencies/SP-NAT-POST_v1.0.md',
+  { code: 'SP-NAT-POST',         file: '09-national/agencies/SP-NAT-POST_v1.1.md',
     kw: ['우체국', '우정청', '등기우편', '우편'] },
-  { code: 'SP-NAT-POLICE',       file: '09-national/agencies/SP-NAT-POLICE_v1.0.md',
+  { code: 'SP-NAT-POLICE',       file: '09-national/agencies/SP-NAT-POLICE_v1.1.md',
     kw: ['지방경찰청', '국가경찰', '112', '고소장', '수사'] },
-  { code: 'SP-NAT-LABOR',        file: '09-national/agencies/SP-NAT-LABOR_v1.0.md',
+  { code: 'SP-NAT-LABOR',        file: '09-national/agencies/SP-NAT-LABOR_v1.1.md',
     kw: ['근로복지공단', '산재보험', '산업재해'] },
 ];
 
@@ -250,7 +250,7 @@ export async function assembleJejuSystemPrompt(userText, pdvLocationHint = null)
   const isWaterQuery = /상수도|수돗물|누수|수질|정수|급수|배관/.test(text);
   async function _appendExpertIfMatched() {
     if (isWaterQuery) {
-      const expText = await _fetchText('06-expert/SP-EXP-WATER_v1.0.md');
+      const expText = await _fetchText('06-expert/SP-EXP-WATER_v1.1.md');
       parts.push(expText);
       trace.push('SP-EXP-WATER');
     }
@@ -271,7 +271,7 @@ export async function assembleJejuSystemPrompt(userText, pdvLocationHint = null)
     if (cityCode.code === 'SP-CITY-SEOGWIPO' && isWaterQuery) {
       trace.push('(규칙 F: 서귀포 상하수도는 읍면동 생략)');
     } else {
-      const emdTemplate = await _fetchText('05-emd/SP-EMD-TEMPLATE_v1.0.md');
+      const emdTemplate = await _fetchText('05-emd/SP-EMD-TEMPLATE_v1.1.md');
       parts.push(_renderEmdTemplate(emdTemplate, emdMatch));
       trace.push(`SP-EMD-${emdMatch.읍면동명}`);
     }
