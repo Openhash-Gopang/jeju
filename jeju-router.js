@@ -6,14 +6,18 @@
  * [JEJU_CHAIN: SP-DO-000 > L2 > L3? > L4?] 문법에 따라 요청마다 다른
  * 조합의 SP를 동적으로 조립해야 한다. 이 파일이 그 조립을 담당한다.
  *
- * 캐싱 전략(JEJU-GOV-COMMON §7)에 따라 JEJU-GOV-COMMON + JEJU-DO-SP는
- * 항상 고정 접두사로 유지하고, 그 뒤에만 매 요청마다 가변 SP를 붙인다.
+ * v1.1: JEJU-NATIONAL-SP(국가기관 트리) 추가 — JEJU-DO-SP(도청 트리)와
+ * JEJU-GOV-COMMON 바로 아래의 형제 노드다(JEJU-NATIONAL-SP §0). 그래서
+ * "고정 접두사"는 JEJU-GOV-COMMON까지만이고, 그 다음 DO-SP냐 NATIONAL-SP냐는
+ * 매 요청마다 배타적으로 갈린다 — 두 트리를 동시에 체인하지 않는다.
  */
 
 const _RAW = 'https://raw.githubusercontent.com/Openhash-Gopang/gopang/main/prompts/Jejudo/';
 
-// ── 고정 접두사 캐시 ─────────────────────────────────────────
-let _fixedPrefix = null;
+// ── 고정 접두사(GOV-COMMON) + 배타적 L1 노드(DO-SP/NATIONAL-SP) 캐시 ──
+let _govCommon = null;
+let _doSpCache = null;
+let _nationalSpCache = null;
 
 async function _fetchText(path) {
   const r = await fetch(_RAW + path + '?t=' + Math.floor(Date.now() / 3600000)); // 1시간 캐시 버스팅
@@ -21,14 +25,17 @@ async function _fetchText(path) {
   return r.text();
 }
 
-async function _loadFixedPrefix() {
-  if (_fixedPrefix) return _fixedPrefix;
-  const [common, doSp] = await Promise.all([
-    _fetchText('00-common/JEJU-GOV-COMMON_v1.0.md'),
-    _fetchText('01-do/JEJU-DO-SP_v1.0.md'),
-  ]);
-  _fixedPrefix = common + '\n\n---\n\n' + doSp;
-  return _fixedPrefix;
+async function _loadGovCommon() {
+  if (!_govCommon) _govCommon = await _fetchText('00-common/JEJU-GOV-COMMON_v1_1.md');
+  return _govCommon;
+}
+async function _loadDoSp() {
+  if (!_doSpCache) _doSpCache = await _fetchText('01-do/JEJU-DO-SP_v1.0.md');
+  return _doSpCache;
+}
+async function _loadNationalSp() {
+  if (!_nationalSpCache) _nationalSpCache = await _fetchText('09-national/JEJU-NATIONAL-SP_v1.0.md');
+  return _nationalSpCache;
 }
 
 // ── L2 라우팅 테이블 (JEJU-DO-SP §3-1/§3-2/§3-3과 동기화) ─────
@@ -71,6 +78,67 @@ const CITY_TABLE = [
   { code: 'SP-CITY-SEOGWIPO',  file: '04-city/seogwipo/SP-CITY-SEOGWIPO_v1.0.md',
     kw: ['서귀포시', '서귀포시청'] },
 ];
+
+// ── 국가기관 라우팅 테이블 (JEJU-NATIONAL-SP §3-1, 1차 배치 8개) ───
+// 도청 트리(JEJU-DO-SP)와 형제 관계 — 매칭되면 DO-SP 대신 이쪽으로 간다.
+// 지방세(도청)와 국세(세무서) 혼동 방지를 위해 '세금' 같은 범용어는 넣지
+// 않고, 국가기관임이 분명한 고유명사만 트리거로 쓴다.
+const NATIONAL_TABLE = [
+  { code: 'SP-NAT-TAX',          file: '09-national/agencies/SP-NAT-TAX_v1.0.md',
+    kw: ['세무서', '국세', '종합소득세', '부가가치세', '법인세', '홈택스'] },
+  { code: 'SP-NAT-COURT',        file: '09-national/agencies/SP-NAT-COURT_v1.0.md',
+    kw: ['지방법원', '등기소', '나의사건검색', '전자소송', '등기부등본'] },
+  { code: 'SP-NAT-NPS',          file: '09-national/agencies/SP-NAT-NPS_v1.0.md',
+    kw: ['국민연금'] },
+  { code: 'SP-NAT-NHIS',         file: '09-national/agencies/SP-NAT-NHIS_v1.0.md',
+    kw: ['건강보험공단', '건강보험료', '건강검진'] },
+  { code: 'SP-NAT-IMMIGRATION',  file: '09-national/agencies/SP-NAT-IMMIGRATION_v1.0.md',
+    kw: ['출입국', '외국인청', '체류자격', '비자', '귀화', '하이코리아'] },
+  { code: 'SP-NAT-POST',         file: '09-national/agencies/SP-NAT-POST_v1.0.md',
+    kw: ['우체국', '우정청', '등기우편', '우편'] },
+  { code: 'SP-NAT-POLICE',       file: '09-national/agencies/SP-NAT-POLICE_v1.0.md',
+    kw: ['지방경찰청', '국가경찰', '112', '고소장', '수사'] },
+  { code: 'SP-NAT-LABOR',        file: '09-national/agencies/SP-NAT-LABOR_v1.0.md',
+    kw: ['근로복지공단', '산재보험', '산업재해'] },
+];
+
+// ── 카탈로그 등록만 되고 개별 SP는 아직 없는 국가기관 (§4 공통 폴백) ──
+// jeju-national-agency-catalog.md §A/§B 기준. 매칭되면 JEJU-NATIONAL-SP §4
+// 형식으로 즉석 안내하고, 지어내지 않는다(간단한 카탈로그 수준 정보만).
+const CATALOG_ONLY = [
+  { kw: ['검찰청'], name: '제주지방검찰청', ministry: '법무부(대검찰청)', brief: '공소 제기, 수사 지휘' },
+  { kw: ['해양경찰'], name: '제주해양경찰서', ministry: '해양경찰청', brief: '해상 치안, 해양사고 구조(122)' },
+  { kw: ['기상청', '기상특보'], name: '제주지방기상청', ministry: '기상청', brief: '기상특보·예보' },
+  { kw: ['조달청'], name: '제주지방조달청', ministry: '조달청', brief: '공공기관 물품·시설공사 조달' },
+  { kw: ['병무청', '징병검사', '입영'], name: '제주지방병무청', ministry: '병무청', brief: '징병검사·입영·병역판정' },
+  { kw: ['보훈청', '국가유공자'], name: '제주보훈청', ministry: '국가보훈부', brief: '국가유공자 등록·보훈급여' },
+  { kw: ['노동위원회', '부당해고'], name: '제주지방노동위원회', ministry: '고용노동부', brief: '노동쟁의 조정, 부당해고 구제신청' },
+  { kw: ['보호관찰', '준법지원센터'], name: '제주준법지원센터', ministry: '법무부', brief: '보호관찰, 사회봉사·수강명령 집행' },
+  { kw: ['임금체불', '근로개선지도'], name: '광주지방고용노동청 제주근로개선지도센터', ministry: '고용노동부', brief: '근로기준법 위반 신고, 임금체불 진정' },
+  { kw: ['검역소', '해외감염병'], name: '국립제주검역소', ministry: '질병관리청', brief: '해외 유입 감염병 검역' },
+  { kw: ['농산물품질관리원', '원산지표시'], name: '국립농산물품질관리원 제주지원', ministry: '농림축산식품부', brief: '농산물 원산지 표시 단속·인증' },
+  { kw: ['수산물품질관리원'], name: '국립수산물품질관리원 제주지원', ministry: '해양수산부', brief: '수산물 원산지·품질 관리' },
+  { kw: ['수입식품검사'], name: '광주지방식품의약품안전청 제주수입식품검사소', ministry: '식품의약품안전처', brief: '수입식품 검사' },
+  { kw: ['전파관리소', '무선국'], name: '제주전파관리소', ministry: '과학기술정보통신부', brief: '전파 혼신 조사, 무선국 검사' },
+  { kw: ['공항공사', '제주국제공항 운영'], name: '한국공항공사 제주공항', ministry: '국토교통부 산하 공기업', brief: '제주국제공항 시설 운영' },
+  { kw: ['해양수산청', '항만'], name: '제주지방해양수산청', ministry: '해양수산부', brief: '항만 시설·선박 등록(국가 관리 항만)' },
+  { kw: ['스마트쉼센터', '인터넷과의존'], name: '한국지능정보사회진흥원 제주스마트쉼센터', ministry: '과학기술정보통신부/행정안전부', brief: '인터넷·스마트폰 과의존 상담' },
+];
+
+function _matchNational(text) {
+  return _scoreMatch(text, NATIONAL_TABLE);
+}
+function _matchCatalogOnly(text) {
+  for (const c of CATALOG_ONLY) {
+    if (c.kw.some(k => text.includes(k))) return c;
+  }
+  return null;
+}
+function _renderCatalogFallback(c) {
+  return `[JEJU-NATIONAL-SP §4 공통 폴백]\n` +
+    `${c.name}은(는) ${c.ministry}의 제주 지역 사무소로, 아직 이 SP가 상세 안내를 갖추지 못했습니다. ` +
+    `${c.brief}을(를) 담당하며, 정확한 절차는 해당 기관 홈페이지 또는 정부24(gov.kr)에서 확인하시는 것을 권장합니다.`;
+}
 
 // ── EMD 데이터 로드 (한림 + 나머지 42개 병합) ───────────────────
 let _emdRecords = null;
@@ -146,10 +214,47 @@ function _renderEmdTemplate(template, rec) {
 // pdvLocationHint: PDV에 저장된 거주 읍면동(있으면 우선 참조, JEJU-GOV-COMMON §2)
 // 반환: { systemPrompt, trace } — trace는 디버깅/로그용 체인 경로
 export async function assembleJejuSystemPrompt(userText, pdvLocationHint = null) {
-  const prefix = await _loadFixedPrefix();
+  const govCommon = await _loadGovCommon();
   const text = userText || '';
-  const trace = ['JEJU-GOV-COMMON', 'SP-DO-000'];
-  const parts = [prefix];
+  const trace = ['JEJU-GOV-COMMON'];
+  const parts = [govCommon];
+
+  // 0) 국가기관 매칭 — JEJU-DO-SP(도청 트리)와 배타적인 형제 노드.
+  //    매칭되면 도청 트리는 아예 로드하지 않는다(JEJU-NATIONAL-SP §0).
+  const natMatch = _matchNational(text);
+  if (natMatch) {
+    const nationalSp = await _loadNationalSp();
+    parts.push(nationalSp);
+    trace.push('JEJU-NATIONAL-SP');
+    const agencyText = await _fetchText(natMatch.file);
+    parts.push(agencyText);
+    trace.push(natMatch.code);
+    return { systemPrompt: parts.join('\n\n---\n\n'), trace };
+  }
+  const catalogOnly = _matchCatalogOnly(text);
+  if (catalogOnly) {
+    const nationalSp = await _loadNationalSp();
+    parts.push(nationalSp);
+    parts.push(_renderCatalogFallback(catalogOnly));
+    trace.push('JEJU-NATIONAL-SP', `(§4 공통 폴백: ${catalogOnly.name})`);
+    return { systemPrompt: parts.join('\n\n---\n\n'), trace };
+  }
+
+  // 여기부터는 도청 트리(JEJU-DO-SP) — 국가기관이 아닌 것으로 판단됐으므로 로드.
+  const doSp = await _loadDoSp();
+  parts.push(doSp);
+  trace.push('SP-DO-000');
+
+  // L4 업무영역 SP 매칭 — 지금은 상하수도(SP-EXP-WATER) 하나뿐.
+  // JEJU-GOV-COMMON §10(정직성·데이터 연동 공백 고지 원칙)의 첫 실증 사례.
+  const isWaterQuery = /상수도|수돗물|누수|수질|정수|급수|배관/.test(text);
+  async function _appendExpertIfMatched() {
+    if (isWaterQuery) {
+      const expText = await _fetchText('06-expert/SP-EXP-WATER_v1.0.md');
+      parts.push(expText);
+      trace.push('SP-EXP-WATER');
+    }
+  }
 
   // 1) 읍면동/리 이름이 직접 언급되면 규칙 B/C/F: 행정시 → 읍면동 체인
   const emdRecords = await _loadEmdRecords();
@@ -162,8 +267,7 @@ export async function assembleJejuSystemPrompt(userText, pdvLocationHint = null)
     parts.push(cityText);
     trace.push(cityCode.code);
 
-    // 서귀포시 + 상하수도 키워드 → 규칙 F: 읍면동 생략, 시청 직행
-    const isWaterQuery = /상수도|수돗물|누수|수질|정수/.test(text);
+    // 서귀포시 + 상하수도 키워드 → 규칙 F: 읍면동 생략, 시청 직행 후 바로 SP-EXP-WATER
     if (cityCode.code === 'SP-CITY-SEOGWIPO' && isWaterQuery) {
       trace.push('(규칙 F: 서귀포 상하수도는 읍면동 생략)');
     } else {
@@ -171,6 +275,7 @@ export async function assembleJejuSystemPrompt(userText, pdvLocationHint = null)
       parts.push(_renderEmdTemplate(emdTemplate, emdMatch));
       trace.push(`SP-EMD-${emdMatch.읍면동명}`);
     }
+    await _appendExpertIfMatched();
 
     return { systemPrompt: parts.join('\n\n---\n\n'), trace };
   }
@@ -181,6 +286,7 @@ export async function assembleJejuSystemPrompt(userText, pdvLocationHint = null)
     const cityText = await _fetchText(cityOnly.file);
     parts.push(cityText);
     trace.push(cityOnly.code);
+    await _appendExpertIfMatched();
     return { systemPrompt: parts.join('\n\n---\n\n'), trace };
   }
 
@@ -190,10 +296,18 @@ export async function assembleJejuSystemPrompt(userText, pdvLocationHint = null)
     const divText = await _fetchText(divMatch.file);
     parts.push(divText);
     trace.push(divMatch.code);
+    await _appendExpertIfMatched();
     return { systemPrompt: parts.join('\n\n---\n\n'), trace };
   }
 
-  // 4) 아무 것도 안 걸리면 도청 공통 레이어만(§2: 개요·안내 수준으로 직접 답)
+  // 4) 읍면동/실국 어느 쪽도 안 걸렸지만 업무영역만 매칭된 경우(예: 지역 언급 없이 "수돗물 냄새나요")
+  if (isWaterQuery) {
+    await _appendExpertIfMatched();
+    trace.push('(지역 미특정 — SP-EXP-WATER가 먼저 지역 확인 유도)');
+    return { systemPrompt: parts.join('\n\n---\n\n'), trace };
+  }
+
+  // 5) 아무 것도 안 걸리면 도청 공통 레이어만(§2: 개요·안내 수준으로 직접 답)
   trace.push('(L2 미매칭 — 공통 레이어가 일반 안내만 제공)');
   return { systemPrompt: parts.join('\n\n---\n\n'), trace };
 }
