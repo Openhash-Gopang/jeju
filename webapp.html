@@ -105,7 +105,7 @@ html,body{height:100%;height:100dvh;overflow:hidden;
           <div class="intro-sub" style="margin-top:6px">복지 · 세정 · 건축 · 상하수도 · 농업 등<br>제주 행정 관련 무엇이든 물어보세요.</div>
         </div>
         <div class="chip-row">
-          <button class="chip" onclick="qs('한림읍 수돗물에서 냄새가 나요')">상하수도 민원</button>
+          <button class="chip" onclick="qs('수돗물에서 냄새가 나요')">상하수도 민원</button>
           <button class="chip" onclick="qs('기초생활수급 신청하려면 어디로 가야 하나요')">복지 안내</button>
           <button class="chip" onclick="qs('고향사랑기부금 얼마까지 세액공제 되나요')">고향사랑기부</button>
           <button class="chip" onclick="qs('건축허가 신청은 어디서 하나요')">건축 인허가</button>
@@ -136,7 +136,47 @@ const PROXY = 'https://hondi-proxy.tensor-city.workers.dev';
 const SP_FALLBACK = `당신은 제주특별자치도청 AI입니다. 아직 라우터 로드에 실패해 도메인 특화 SP 없이
 일반 지식으로만 응답 중임을 사용자에게 알리고, 정확한 안내는 제주콜센터(064-120)를 권장하세요.`;
 
-// ── PDV 거주지 힌트(있으면) ───────────────────────────────────
+// ── GPS 기반 읍면동 감지 (JEJU-GOV-COMMON §2 "관할 검증" 자동화) ──
+// PDV 힌트(localStorage.gopang_user_v4)는 jeju.hondi.net이 별도 오리진이라
+// hondi.net의 localStorage를 못 읽어 항상 null이었다(사고실험에서 발견된
+// 문제). GPS 리버스 지오코딩(카카오 coord2address, hondi-proxy /geocode
+// 경유)으로 대체 — 오리진 문제 없이 실제 현재 위치를 바로 얻는다.
+let _gpsEmdCache = null;
+let _gpsAttempted = false;
+
+async function _detectGpsLocation() {
+  if (_gpsAttempted) return _gpsEmdCache;
+  _gpsAttempted = true;
+  if (!navigator.geolocation) return null;
+  try {
+    const pos = await new Promise((resolve, reject) => {
+      navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 6000, maximumAge: 300000 });
+    });
+    const { latitude: lat, longitude: lng } = pos.coords;
+    const r = await fetch(`${PROXY}/geocode?lat=${lat}&lng=${lng}`);
+    if (!r.ok) throw new Error('geocode ' + r.status);
+    const d = await r.json();
+    const doc = d.documents?.[0];
+    if (!doc) return null;
+    const region2 = doc.road_address?.region_2depth_name || doc.address?.region_2depth_name;
+    const region3 = doc.road_address?.region_3depth_name
+      || (doc.address?.region_3depth_name || '').split(' ')[0];
+    // 제주 밖이면(다른 지역에서 접속) 위치 힌트를 쓰지 않는다 — 관할 오매칭 방지.
+    if (!region2 || !['제주시', '서귀포시'].includes(region2) || !region3) {
+      console.log('[Jeju] GPS 위치가 제주 관할 밖 — 힌트 미사용:', region2 || '(확인 안 됨)');
+      return null;
+    }
+    _gpsEmdCache = { emdName: region3, city: region2 };
+    console.log('[Jeju] GPS 위치 감지:', region3);
+    toast(`현재 위치: ${region3}`);
+    return _gpsEmdCache;
+  } catch (e) {
+    console.warn('[Jeju] GPS 위치 확인 실패(권한 거부·타임아웃 등):', e.message);
+    return null;
+  }
+}
+
+// ── PDV 거주지 힌트(GPS 실패 시 최후 폴백 — 대부분 null로 확인됨) ──
 function _pdvLocationHint() {
   try {
     const p = JSON.parse(localStorage.getItem('gopang_user_v4') || sessionStorage.getItem('gopang_user_v4') || 'null');
@@ -144,19 +184,60 @@ function _pdvLocationHint() {
   } catch { return null; }
 }
 
-// ── AI 호출 (라우터로 SP 동적 조립) ─────────────────────────────
-async function callAI(messages, latestUserText) {
-  let sp = SP_FALLBACK, trace = [];
-  try {
-    const r = await window._assembleJejuSystemPrompt(latestUserText, _pdvLocationHint());
-    sp = r.systemPrompt;
-    trace = r.trace;
-  } catch (e) {
-    console.warn('[Jeju] SP 조립 실패, 폴백 사용:', e.message);
-  }
-  document.getElementById('trace-badge').textContent = trace.join(' > ');
-  document.getElementById('trace-badge').style.display = trace.length ? 'inline-block' : 'none';
+// ── PDV 중개 접근 (JEJU-GOV-COMMON §13) ─────────────────────────
+// PDV는 나만의 AI 비서(hondi.net, GWP 오프너)만 읽는다. 이 함수는 그쪽에
+// GWP_PDV_REQUEST를 보내고 사용자 승인을 기다린다. GWP를 거치지 않고 이
+// 페이지에 직접 접속한 경우(window.opener 없음)는 즉시 no_opener로 반환한다
+// (§13-5) — 이 경우 SP가 대화로 직접 물어보는 방식으로 전환해야 한다.
+function _requestPdvData(fields, reason, requestingSp) {
+  return new Promise((resolve) => {
+    if (!window.opener) {
+      resolve({ approved: false, no_opener: true });
+      return;
+    }
+    const request_id = crypto.randomUUID();
+    const timer = setTimeout(() => {
+      window.removeEventListener('message', handler);
+      resolve({ approved: false, timeout: true });
+    }, 60000); // 사용자가 승인 버튼 누를 시간 60초
 
+    function handler(e) {
+      const msg = e.data;
+      if (msg?.type !== 'GWP_PDV_RESPONSE' || msg.request_id !== request_id) return;
+      clearTimeout(timer);
+      window.removeEventListener('message', handler);
+      resolve(msg);
+    }
+    window.addEventListener('message', handler);
+
+    window.opener.postMessage({
+      type: 'GWP_PDV_REQUEST', request_id,
+      requesting_sp: requestingSp, fields, reason,
+    }, 'https://hondi.net');
+  });
+}
+
+// SP 응답에서 [PDV_REQUEST: ...] 태그를 찾는다. request_id는 SP가 뭘 쓰든
+// 신뢰하지 않고 이 함수 호출부에서 새로 발급한다(LLM이 진짜 UUID를 안정적으로
+//못 만들 수 있어서).
+function _parsePdvRequestTag(text) {
+  const m = text.match(/\[PDV_REQUEST:([^\]]*fields=\[[^\]]*\][^\]]*)\]/);
+  if (!m) return null;
+  const body = m[0];
+  const spMatch     = body.match(/requesting_sp=([^,\]]+)/);
+  const fieldsMatch = body.match(/fields=\[([^\]]+)\]/);
+  const reasonMatch = body.match(/reason=([^\]]+?)\]?$/);
+  if (!fieldsMatch) return null;
+  return {
+    requestingSp: spMatch ? spMatch[1].trim() : 'unknown',
+    fields: fieldsMatch[1].split(',').map(s => s.trim()).filter(Boolean),
+    reason: reasonMatch ? reasonMatch[1].trim() : '',
+    fullMatch: m[0],
+  };
+}
+
+// ── 원시 채팅 완성 호출 (DeepSeek → Claude 폴백) ─────────────────
+async function _rawChatCompletion(sp, messages) {
   try {
     const r = await fetch(`${PROXY}/ai/chat`, {
       method: 'POST',
@@ -165,7 +246,7 @@ async function callAI(messages, latestUserText) {
     });
     if (!r.ok) throw new Error(`proxy ${r.status}`);
     const d = await r.json();
-    return { text: d.content || '잠시 후 다시 시도해 주세요.', trace };
+    return d.content || '잠시 후 다시 시도해 주세요.';
   } catch(e) {
     console.warn('[Jeju] DeepSeek 폴백 → Claude:', e.message);
     const r2 = await fetch('https://api.anthropic.com/v1/messages', {
@@ -174,8 +255,53 @@ async function callAI(messages, latestUserText) {
       body: JSON.stringify({ model:'claude-sonnet-4-20250514', max_tokens:1000, system:sp, messages:messages.slice(-8) }),
     });
     const d2 = await r2.json();
-    return { text: d2.content?.find(c => c.type === 'text')?.text || '오류가 발생했습니다.', trace };
+    return d2.content?.find(c => c.type === 'text')?.text || '오류가 발생했습니다.';
   }
+}
+
+// ── AI 호출 (라우터로 SP 동적 조립 + PDV 중개 2단계 흐름) ────────
+async function callAI(messages, latestUserText) {
+  let sp = SP_FALLBACK, trace = [];
+  try {
+    const gps = await _detectGpsLocation();
+    const locationHint = gps?.emdName || _pdvLocationHint();
+    const r = await window._assembleJejuSystemPrompt(latestUserText, locationHint);
+    sp = r.systemPrompt;
+    trace = r.trace;
+  } catch (e) {
+    console.warn('[Jeju] SP 조립 실패, 폴백 사용:', e.message);
+  }
+  document.getElementById('trace-badge').textContent = trace.join(' > ');
+  document.getElementById('trace-badge').style.display = trace.length ? 'inline-block' : 'none';
+
+  let text = await _rawChatCompletion(sp, messages);
+
+  // Step 5 연장: SP가 PDV 필드를 요청했으면 나만의 AI 비서에게 중개 요청
+  const pdvReq = _parsePdvRequestTag(text);
+  if (pdvReq) {
+    const result = await _requestPdvData(pdvReq.fields, pdvReq.reason, pdvReq.requestingSp);
+    let pdvContext;
+    if (result.no_opener) {
+      pdvContext = `[PDV_RESULT: 이 세션은 GWP(나만의 AI 비서)를 거치지 않고 직접 접속됐습니다. ` +
+        `PDV 중개 요청 자체가 불가능합니다 — §13-5에 따라 사용자에게 필요한 정보를 대화로 직접 물어보고, ` +
+        `그 답변은 세션 안에서만 참고하고 PDV에 저장하지 마십시오.]`;
+    } else if (result.timeout) {
+      pdvContext = `[PDV_RESULT: 사용자가 60초 내에 승인/거부를 응답하지 않았습니다. 응답 없이 진행 가능한 선까지만 답하십시오.]`;
+    } else if (!result.approved) {
+      pdvContext = `[PDV_RESULT: 사용자가 정보 제공을 거부했습니다(fields=${pdvReq.fields.join(',')}). ` +
+        `§11 능동적 역량 원칙에 따라 이 필드 없이 답할 수 있는 부분까지는 계속 답하고, 왜 더 정확히 못 답하는지만 짧게 밝히십시오.]`;
+    } else {
+      pdvContext = `[PDV_RESULT: 승인됨. 값: ${JSON.stringify(result.values)}. ` +
+        `not_in_pdv:true로 표시된 필드는 실제로 PDV에 없는 것이니 지어내지 말고 §13-4 문구로 안내하십시오.]`;
+    }
+    const followup = [...messages,
+      { role: 'assistant', content: text },
+      { role: 'user', content: pdvContext },
+    ];
+    text = await _rawChatCompletion(sp, followup);
+  }
+
+  return { text, trace };
 }
 
 // ── UI 헬퍼 ───────────────────────────────────────────────────
@@ -278,6 +404,9 @@ function _recordPdv(userMsg, trace) {
 }
 
 // ── ctx_enc=b64 분기 (GWP 새 탭 진입 시 원 질문 자동 전달) ─────
+// ── 페이지 로드 시 GPS 위치를 미리 확인 (첫 메시지 지연 방지) ──
+_detectGpsLocation();
+
 (function initCtx() {
   const params = new URLSearchParams(location.search);
   const ctxRaw = params.get('ctx') || '';

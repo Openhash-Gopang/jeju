@@ -26,7 +26,7 @@ async function _fetchText(path) {
 }
 
 async function _loadGovCommon() {
-  if (!_govCommon) _govCommon = await _fetchText('00-common/JEJU-GOV-COMMON_v1_3.md');
+  if (!_govCommon) _govCommon = await _fetchText('00-common/JEJU-GOV-COMMON_v1_4.md');
   return _govCommon;
 }
 async function _loadDoSp() {
@@ -53,7 +53,7 @@ const L2_TABLE = [
     kw: ['경제활력국', '소상공인', '자영업', '중소기업', '일자리', '정책자금', '경제'] },
   { code: 'SP-DO-INNOV',    file: '02-do-dept/SP-DO-INNOV_v1.1.md',
     kw: ['혁신산업국', '신재생', '풍력', '태양광', '디지털', 'AI산업', '스타트업', '산업'] },
-  { code: 'SP-DO-WELFARE',  file: '02-do-dept/SP-DO-WELFARE_v1.1.md',
+  { code: 'SP-DO-WELFARE',  file: '02-do-dept/SP-DO-WELFARE_v1.2.md',
     kw: ['복지가족국', '보건복지여성국', '기초생활수급', '기초연금', '보육료', '어린이집', '장애인복지', '한부모',
          '복지', '임신', '출산', '육아', '보육', '장애인', '여성가족'] },
   { code: 'SP-DO-CLIMATE',  file: '02-do-dept/SP-DO-CLIMATE_v1.1.md',
