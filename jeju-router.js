@@ -84,15 +84,15 @@ const CITY_TABLE = [
 // 지방세(도청)와 국세(세무서) 혼동 방지를 위해 '세금' 같은 범용어는 넣지
 // 않고, 국가기관임이 분명한 고유명사만 트리거로 쓴다.
 const NATIONAL_TABLE = [
-  { code: 'SP-NAT-TAX',          file: '09-national/agencies/SP-NAT-TAX_v1.1.md',
+  { code: 'SP-NAT-TAX',          file: '09-national/agencies/SP-NAT-TAX_v1.2.md',
     kw: ['세무서', '국세', '종합소득세', '부가가치세', '법인세', '홈택스'] },
   { code: 'SP-NAT-COURT',        file: '09-national/agencies/SP-NAT-COURT_v1.1.md',
     kw: ['지방법원', '등기소', '나의사건검색', '전자소송', '등기부등본'] },
-  { code: 'SP-NAT-NPS',          file: '09-national/agencies/SP-NAT-NPS_v1.1.md',
+  { code: 'SP-NAT-NPS',          file: '09-national/agencies/SP-NAT-NPS_v1.2.md',
     kw: ['국민연금'] },
-  { code: 'SP-NAT-NHIS',         file: '09-national/agencies/SP-NAT-NHIS_v1.1.md',
+  { code: 'SP-NAT-NHIS',         file: '09-national/agencies/SP-NAT-NHIS_v1.2.md',
     kw: ['건강보험공단', '건강보험료', '건강검진'] },
-  { code: 'SP-NAT-IMMIGRATION',  file: '09-national/agencies/SP-NAT-IMMIGRATION_v1.1.md',
+  { code: 'SP-NAT-IMMIGRATION',  file: '09-national/agencies/SP-NAT-IMMIGRATION_v1.2.md',
     kw: ['출입국', '외국인청', '체류자격', '비자', '귀화', '하이코리아'] },
   { code: 'SP-NAT-POST',         file: '09-national/agencies/SP-NAT-POST_v1.1.md',
     kw: ['우체국', '우정청', '등기우편', '우편'] },
@@ -393,7 +393,7 @@ export async function assembleJejuSystemPrompt(userText, pdvLocationHint = null,
     if (cityCode.code === 'SP-CITY-SEOGWIPO' && isWaterQuery) {
       trace.push('(규칙 F: 서귀포 상하수도는 읍면동 생략)');
     } else {
-      const emdTemplate = await _fetchText('05-emd/SP-EMD-TEMPLATE_v1.1.md');
+      const emdTemplate = await _fetchText('05-emd/SP-EMD-TEMPLATE_v1.2.md');
       parts.push(_renderEmdTemplate(emdTemplate, emdMatch));
       trace.push(`SP-EMD-${emdMatch.읍면동명}`);
     }
