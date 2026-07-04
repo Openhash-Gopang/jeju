@@ -361,11 +361,11 @@ const SP_CODE_TO_PDV_SCOPE = {
   'SP-NAT-ENV': 'kenv', 'SP-NAT-LABORIMPROVE': 'klaborimprove',
   'SP-NAT-INTERNET': 'kinternet', 'SP-NAT-AIRPORT': 'kairport', 'SP-NAT-PORT': 'kport',
   // 도 자체 부서
-  'SP-DO-PLAN': 'jeju_plan', 'SP-DO-SAFETY': 'jeju_safety', 'SP-DO-JACHI': 'jeju_jachi',
-  'SP-DO-ECON': 'jeju_econ', 'SP-DO-INNOV': 'jeju_innov', 'SP-DO-WELFARE': 'jeju_welfare',
-  'SP-DO-CLIMATE': 'jeju_climate', 'SP-DO-HOUSING': 'jeju_housing', 'SP-DO-TRANSPORT': 'jeju_transport',
-  'SP-DO-CULTURE': 'jeju_culture', 'SP-DO-TOURISM': 'jeju_tourism', 'SP-DO-AGRI': 'jeju_agri',
-  'SP-DO-OCEAN': 'jeju_ocean',
+  'SP-DO-PLAN': 'kplan', 'SP-DO-SAFETY': 'ksafety', 'SP-DO-JACHI': 'kjachi',
+  'SP-DO-ECON': 'kecon', 'SP-DO-INNOV': 'kinnov', 'SP-DO-WELFARE': 'kwelfare',
+  'SP-DO-CLIMATE': 'kclimate', 'SP-DO-HOUSING': 'khousing', 'SP-DO-TRANSPORT': 'ktransport',
+  'SP-DO-CULTURE': 'kculture', 'SP-DO-TOURISM': 'ktourism', 'SP-DO-AGRI': 'kagri',
+  'SP-DO-OCEAN': 'kocean',
 };
 const _PDV_HISTORY_SCOPE_PLACEHOLDER_RE = /\{이 턴에 로드된 SP의 PDV scope\}/g;
 
