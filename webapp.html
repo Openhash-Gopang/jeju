@@ -10,6 +10,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pretendard:wght@400;500;600;700;800&display=swap">
 <script src="/gopang-wallet.js"></script>
+<script src="/pdv-history-client.js"></script>
 <script type="module" src="https://hondi.net/auth/subsystem-auth.js"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -259,8 +260,8 @@ async function _rawChatCompletion(sp, messages) {
   }
 }
 
-// ── AI 호출 (라우터로 SP 동적 조립 + PDV 중개 2단계 흐름) ────────
-async function callAI(messages, latestUserText) {
+// ── AI 호출(원본) — 라우터로 SP 동적 조립 + PDV 중개(§13) 2단계 흐름 ──
+async function _callAIRaw(messages, latestUserText) {
   let sp = SP_FALLBACK, trace = [];
   try {
     const gps = await _detectGpsLocation();
@@ -302,6 +303,44 @@ async function callAI(messages, latestUserText) {
   }
 
   return { text, trace };
+}
+
+// ── AI 호출(§13b PDV_HISTORY_REQUEST 가로채기 계층) ──────────────
+// 2026-07-04: tax/school/stock/market과 동일 패턴. scope 값은 jeju-router.js
+// (assembleJejuSystemPrompt)가 §13b 자리표시자에 이미 정확히 치환해뒀으므로
+// (SP_CODE_TO_PDV_SCOPE 참조), 여기서는 그 값을 그대로 신뢰해 태그를
+// 파싱·조회하기만 하면 된다.
+async function callAI(messages, latestUserText) {
+  const raw = await _callAIRaw(messages, latestUserText);
+  if (!window.PdvHistoryClient || !/\[PDV(?:_HISTORY)?_REQUEST:/.test(raw.text)) return raw;
+
+  let ipv6 = 'anonymous';
+  try {
+    const token = JSON.parse(sessionStorage.getItem('gopang_sso_token') || '{}');
+    ipv6 = token.ipv6 || 'anonymous';
+  } catch (e) {}
+
+  const { interceptPdvTags } = window.PdvHistoryClient;
+  const r = await interceptPdvTags(raw.text, {
+    svc: 'jeju', ipv6,
+    resumeContext: { messages, latestUserText },
+  });
+  if (!r) return raw;
+  if (r.redirecting) return raw; // 페이지 이동 중 — 반환값은 사실상 안 쓰임
+
+  const summaryText = (r.results || []).map(x => {
+    if (x.error) return `(${x.scope} 이력 조회 실패: ${x.error})`;
+    if (!x.summary || x.summary.available === false) return `(${x.scope} 이전 기록 없음)`;
+    return `(${x.scope} 이전 기록: ${JSON.stringify(x.summary)})`;
+  }).join('\n');
+
+  const cleaned = raw.text.replace(/\[PDV(?:_HISTORY)?_REQUEST:[^\]]+\]/g, '').trim();
+  const followUp = [
+    ...messages,
+    { role: 'assistant', content: cleaned || '(이전 기록을 조회하겠습니다)' },
+    { role: 'user', content: `[시스템: PDV 조회 결과]\n${summaryText}\n\n위 조회 결과를 반영해서 답변을 이어가 주세요.` },
+  ];
+  return _callAIRaw(followUp, latestUserText);
 }
 
 // ── UI 헬퍼 ───────────────────────────────────────────────────
@@ -429,6 +468,32 @@ window._onGopangAuth = function(user) {
   try { sessionStorage.setItem('gopang_sso_token', JSON.stringify(user)); } catch(e) {}
   console.log('[Jeju] ✅ 인증 완료 —', user.level, user.ipv6?.slice(-8));
 };
+
+// 2026-07-04: consent.html에서 돌아온 직후인지 확인 — §13b PDV_HISTORY_REQUEST.
+document.addEventListener('DOMContentLoaded', async () => {
+  if (!window.PdvHistoryClient) return;
+  const back = window.PdvHistoryClient.checkPdvConsentReturn();
+  if (!back) return;
+  hideIntro();
+  if (back.denied) {
+    addMob('이전 기록 조회에 동의하지 않으셨네요. 처음부터 다시 도와드릴게요.', 'ai');
+    return;
+  }
+  if (back.granted && back.resumeContext?.messages) {
+    addMob('동의 확인했습니다. 이전 기록을 반영해서 이어가겠습니다...', 'ai');
+    const tid = addMob('…', 'ai');
+    try {
+      const { text, trace } = await callAI(back.resumeContext.messages, back.resumeContext.latestUserText);
+      document.getElementById(tid)?.remove();
+      addMob(text, 'ai');
+      if (trace?.length) addTrace(trace.join(' → '));
+      hist = back.resumeContext.messages.concat([{ role:'assistant', content:text }]);
+    } catch (e) {
+      document.getElementById(tid)?.remove();
+      addMob(`이어서 진행하는 중 오류가 발생했습니다: ${e.message}`, 'ai');
+    }
+  }
+});
 </script>
 </body>
 </html>

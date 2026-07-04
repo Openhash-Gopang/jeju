@@ -339,11 +339,55 @@ function _isEmergency(text) {
   return EMERGENCY_RE.test(text);
 }
 
-// ── 메인 진입점 ──────────────────────────────────────────────────
+// ── PDV_HISTORY_REQUEST(§13b) scope 결정 테이블 (2026-07-04) ─────
+// trace의 마지막 SP 코드를 이 표로 조회해 §13b 자리표시자를 치환한다.
+// ktax/kpolice는 이미 전국 통합 포털(tax.hondi.net/police.hondi.net)이
+// 있어 그 scope를 그대로 재사용하고(worker.js SCOPE_SOURCE_MAP에 jeju가
+// 추가 reporter_svc로 등록돼 있다), 나머지는 jeju가 유일한 구현체라
+// jeju_ 접두어 scope를 쓴다(worker.js 사고실험 참조).
+const SP_CODE_TO_PDV_SCOPE = {
+  // 국가기관 지사
+  'SP-NAT-TAX': 'ktax', 'SP-NAT-POLICE': 'kpolice',
+  'SP-NAT-COURT': 'jeju_court', 'SP-NAT-NPS': 'jeju_nps', 'SP-NAT-NHIS': 'jeju_nhis',
+  'SP-NAT-IMMIGRATION': 'jeju_immigration', 'SP-NAT-POST': 'jeju_post',
+  'SP-NAT-LABOR': 'jeju_labor', 'SP-NAT-PROSECUTION': 'jeju_prosecution',
+  'SP-NAT-COASTGUARD': 'jeju_coastguard', 'SP-NAT-WEATHER': 'jeju_weather',
+  'SP-NAT-PPS': 'jeju_pps', 'SP-NAT-MMA': 'jeju_mma', 'SP-NAT-VETERANS': 'jeju_veterans',
+  'SP-NAT-LABORREL': 'jeju_laborrel', 'SP-NAT-PROBATION': 'jeju_probation',
+  'SP-NAT-ANIMALQUARANTINE': 'jeju_animalquarantine', 'SP-NAT-HUMANQUARANTINE': 'jeju_humanquarantine',
+  'SP-NAT-AGROQUALITY': 'jeju_agroquality', 'SP-NAT-FISHQUALITY': 'jeju_fishquality',
+  'SP-NAT-FOODIMPORT': 'jeju_foodimport', 'SP-NAT-DATA': 'jeju_data', 'SP-NAT-RADIO': 'jeju_radio',
+  'SP-NAT-ENV': 'jeju_env', 'SP-NAT-LABORIMPROVE': 'jeju_laborimprove',
+  'SP-NAT-INTERNET': 'jeju_internet', 'SP-NAT-AIRPORT': 'jeju_airport', 'SP-NAT-PORT': 'jeju_port',
+  // 도 자체 부서
+  'SP-DO-PLAN': 'jeju_plan', 'SP-DO-SAFETY': 'jeju_safety', 'SP-DO-JACHI': 'jeju_jachi',
+  'SP-DO-ECON': 'jeju_econ', 'SP-DO-INNOV': 'jeju_innov', 'SP-DO-WELFARE': 'jeju_welfare',
+  'SP-DO-CLIMATE': 'jeju_climate', 'SP-DO-HOUSING': 'jeju_housing', 'SP-DO-TRANSPORT': 'jeju_transport',
+  'SP-DO-CULTURE': 'jeju_culture', 'SP-DO-TOURISM': 'jeju_tourism', 'SP-DO-AGRI': 'jeju_agri',
+  'SP-DO-OCEAN': 'jeju_ocean',
+};
+const _PDV_HISTORY_SCOPE_PLACEHOLDER_RE = /\{이 턴에 로드된 SP의 PDV scope\}/g;
+
+// trace 배열에서 뒤에서부터 SP_CODE_TO_PDV_SCOPE에 등록된 코드를 찾는다
+// (trace 끝쪽 요소일수록 더 구체적인 노드 — city/emd 코드는 지리 정보라
+// 이 표에 없으므로 자연히 건너뛰고 그 앞의 부서/기관 코드를 찾게 된다).
+function _resolvePdvScopeFromTrace(trace) {
+  for (let i = trace.length - 1; i >= 0; i--) {
+    if (SP_CODE_TO_PDV_SCOPE[trace[i]]) return SP_CODE_TO_PDV_SCOPE[trace[i]];
+  }
+  return 'pdv_general'; // 부서를 특정 못 한 경우(공통 레이어 응답 등)의 안전한 기본값
+}
+
+
+// ── 메인 진입점(내부용) ──────────────────────────────────────────
 // userText: 사용자 발화(또는 GWP ctx로 넘어온 최초 요청 텍스트)
 // pdvLocationHint: PDV에 저장된 거주 읍면동(있으면 우선 참조, JEJU-GOV-COMMON §2)
 // 반환: { systemPrompt, trace } — trace는 디버깅/로그용 체인 경로
-export async function assembleJejuSystemPrompt(userText, pdvLocationHint = null, classifyFn = null) {
+// 2026-07-04: export하던 함수를 내부용(_Raw)으로 이름 바꾸고, 실제 export는
+// 아래의 얇은 래퍼가 담당한다 — §13b PDV_HISTORY_REQUEST 자리표시자 치환을
+// 반환 지점이 8곳 넘게 흩어진 이 함수 내부를 전부 건드리지 않고 한 곳에서
+// 처리하기 위함(호출부 입장에서 동작은 완전히 동일, 순수 후처리 wrapper).
+async function _assembleJejuSystemPromptRaw(userText, pdvLocationHint = null, classifyFn = null) {
   const [universalIntegrity, govCommon] = await Promise.all([_loadUniversalIntegrity(), _loadGovCommon()]);
   const text = userText || '';
   const trace = ['UNIVERSAL-INTEGRITY', 'JEJU-GOV-COMMON'];
@@ -484,6 +528,23 @@ export async function assembleJejuSystemPrompt(userText, pdvLocationHint = null,
   // 있는 경우가 많다(예: 자치경찰 vs 국가경찰 차이 설명).
   trace.push(classifyFn ? '(LLM 분류도 NONE — 공통 레이어 지식으로 답변)' : '(L2 미매칭 — 공통 레이어가 일반 안내만 제공)');
   return { systemPrompt: parts.join('\n\n---\n\n'), trace };
+}
+
+// ── 메인 진입점(export) ──────────────────────────────────────────
+// _assembleJejuSystemPromptRaw의 결과를 받아 §13b(PDV_HISTORY_REQUEST)
+// scope 자리표시자를 trace 기반으로 치환한 뒤 반환한다. GOV_AGENCIES
+// 쪽(worker.js handleGovRelay)의 서버측 치환과 동일한 목적 — LLM이
+// scope 값을 추측하지 않게 한다(2026-07-04, 사고실험에서 발견된
+// police/public/911 scope 불일치 버그와 동일 계열 문제를 jeju에서는
+// 애초에 만들지 않기 위함).
+export async function assembleJejuSystemPrompt(userText, pdvLocationHint = null, classifyFn = null) {
+  const result = await _assembleJejuSystemPromptRaw(userText, pdvLocationHint, classifyFn);
+  if (!_PDV_HISTORY_SCOPE_PLACEHOLDER_RE.test(result.systemPrompt)) return result;
+  const scope = _resolvePdvScopeFromTrace(result.trace);
+  return {
+    ...result,
+    systemPrompt: result.systemPrompt.replace(_PDV_HISTORY_SCOPE_PLACEHOLDER_RE, scope),
+  };
 }
 
 window.assembleJejuSystemPrompt = assembleJejuSystemPrompt;
