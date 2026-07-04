@@ -62,35 +62,48 @@ async function _loadNationalSp() {
 // LLM 기반 분류로 고도화 검토).
 const L2_TABLE = [
   { code: 'SP-DO-PLAN',     file: '02-do-dept/SP-DO-PLAN_v1.1.md',
+    domain: 'plan', 도코드: 'jeju',
     kw: ['기획조정실', '고향사랑기부', '세정', '지방세', '취득세', '재산세', '청년정책', '인구정책', '예산', '기획'] },
   { code: 'SP-DO-SAFETY',   file: '02-do-dept/SP-DO-SAFETY_v1.1.md',
+    domain: 'safety', 도코드: 'jeju',
     kw: ['안전건강실', '재난', '태풍', '호우', '보건정책', '감염병', '예방접종', '응급의료', '안전', '재난', '보건'] },
   { code: 'SP-DO-JACHI',    file: '02-do-dept/SP-DO-JACHI_v1.1.md',
+    domain: 'jachi', 도코드: 'jeju',
     kw: ['특별자치행정국', '특별자치', '자치분권', '제주특별법'] },
   { code: 'SP-DO-ECON',     file: '02-do-dept/SP-DO-ECON_v1.1.md',
+    domain: 'econ', 도코드: 'jeju',
     kw: ['경제활력국', '소상공인', '자영업', '중소기업', '일자리', '정책자금', '경제'] },
   { code: 'SP-DO-INNOV',    file: '02-do-dept/SP-DO-INNOV_v1.1.md',
+    domain: 'innov', 도코드: 'jeju',
     kw: ['혁신산업국', '신재생', '풍력', '태양광', '디지털', 'AI산업', '스타트업', '산업'] },
-  // 2026-07-04: WELFARE는 템플릿+데이터 방식으로 이전한 첫 사례(proof of
-  // concept). domain/도코드가 있으면 static file 대신 템플릿을 렌더링한다
-  // — file은 하위 호환/디버깅용으로만 남겨둔다(실제로는 안 쓰임).
+  // 2026-07-04: 도 부서 13개 전부 템플릿+데이터 방식으로 이전 완료
+  // (WELFARE로 시작한 proof of concept을 나머지 12개까지 확장). domain/
+  // 도코드가 있으면 static file 대신 템플릿을 렌더링한다 — file은 하위
+  // 호환/디버깅용 폴백으로만 남겨둔다(데이터 레코드가 없으면 여기로 폴백).
   { code: 'SP-DO-WELFARE',  file: '02-do-dept/SP-DO-WELFARE_v1.2.md',
     domain: 'welfare', 도코드: 'jeju',
     kw: ['복지가족국', '보건복지여성국', '기초생활수급', '기초연금', '보육료', '어린이집', '장애인복지', '한부모',
          '복지', '임신', '출산', '육아', '보육', '장애인', '여성가족'] },
   { code: 'SP-DO-CLIMATE',  file: '02-do-dept/SP-DO-CLIMATE_v1.1.md',
+    domain: 'climate', 도코드: 'jeju',
     kw: ['기후환경국', '전기차', '탄소중립', '환경영향평가', '클린하우스', '분리배출', '폐기물', '환경'] },
   { code: 'SP-DO-HOUSING',  file: '02-do-dept/SP-DO-HOUSING_v1.1.md',
+    domain: 'housing', 도코드: 'jeju',
     kw: ['건설주택국', '공공임대주택', '건축허가', '건축인허가', '주택', '건축'] },
   { code: 'SP-DO-TRANSPORT',file: '02-do-dept/SP-DO-TRANSPORT_v1.1.md',
+    domain: 'transport', 도코드: 'jeju',
     kw: ['교통항공국', '버스', '준공영제', '교통약자', '콜택시', '공영주차장', '공항', '제2공항', '교통'] },
   { code: 'SP-DO-CULTURE',  file: '02-do-dept/SP-DO-CULTURE_v1.1.md',
+    domain: 'culture', 도코드: 'jeju',
     kw: ['문화체육교육국', '생활체육', '평생교육', '평생학습', '문화예술', '체육', '도서관', '문화'] },
   { code: 'SP-DO-TOURISM',  file: '02-do-dept/SP-DO-TOURISM_v1.1.md',
+    domain: 'tourism', 도코드: 'jeju',
     kw: ['관광교류국', '관광지', '숙박업', '게스트하우스', '여행업', '국제교류', '관광'] },
   { code: 'SP-DO-AGRI',     file: '02-do-dept/SP-DO-AGRI_v1.1.md',
+    domain: 'agri', 도코드: 'jeju',
     kw: ['농축산식품국', '농업경영체', '공익직불금', '농산물재해보험', '축산', '농업', '농사'] },
   { code: 'SP-DO-OCEAN',    file: '02-do-dept/SP-DO-OCEAN_v1.1.md',
+    domain: 'ocean', 도코드: 'jeju',
     kw: ['해양수산국', '어업면허', '마을어장', '수산업', '양식업', '어업', '수산'] },
 ];
 
