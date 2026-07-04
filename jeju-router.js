@@ -122,60 +122,88 @@ const CITY_TABLE = [
 // 않고, 국가기관임이 분명한 고유명사만 트리거로 쓴다.
 const NATIONAL_TABLE = [
   { code: 'SP-NAT-TAX',          file: '09-national/agencies/SP-NAT-TAX_v1.2.md',
+    domain: 'tax', 도코드: 'jeju',
     kw: ['세무서', '국세', '종합소득세', '부가가치세', '법인세', '홈택스'] },
   { code: 'SP-NAT-COURT',        file: '09-national/agencies/SP-NAT-COURT_v1.1.md',
+    domain: 'court', 도코드: 'jeju',
     kw: ['지방법원', '등기소', '나의사건검색', '전자소송', '등기부등본'] },
   { code: 'SP-NAT-NPS',          file: '09-national/agencies/SP-NAT-NPS_v1.2.md',
+    domain: 'nps', 도코드: 'jeju',
     kw: ['국민연금'] },
   { code: 'SP-NAT-NHIS',         file: '09-national/agencies/SP-NAT-NHIS_v1.2.md',
+    domain: 'nhis', 도코드: 'jeju',
     kw: ['건강보험공단', '건강보험료', '건강검진'] },
   { code: 'SP-NAT-IMMIGRATION',  file: '09-national/agencies/SP-NAT-IMMIGRATION_v1.2.md',
+    domain: 'immigration', 도코드: 'jeju',
     kw: ['출입국', '외국인청', '체류자격', '비자', '귀화', '하이코리아'] },
   { code: 'SP-NAT-POST',         file: '09-national/agencies/SP-NAT-POST_v1.1.md',
+    domain: 'post', 도코드: 'jeju',
     kw: ['우체국', '우정청', '등기우편', '우편'] },
   { code: 'SP-NAT-POLICE',       file: '09-national/agencies/SP-NAT-POLICE_v1.1.md',
+    domain: 'police', 도코드: 'jeju',
     kw: ['지방경찰청', '국가경찰', '112', '고소장', '수사'] },
   { code: 'SP-NAT-LABOR',        file: '09-national/agencies/SP-NAT-LABOR_v1.1.md',
+    domain: 'labor', 도코드: 'jeju',
     kw: ['근로복지공단', '산재보험', '산업재해'] },
   { code: 'SP-NAT-PROSECUTION',  file: '09-national/agencies/SP-NAT-PROSECUTION_v1.1.md',
+    domain: 'prosecution', 도코드: 'jeju',
     kw: ['검찰청', '고소장', '고발', '공소', '검사실'] },
   { code: 'SP-NAT-COASTGUARD',   file: '09-national/agencies/SP-NAT-COASTGUARD_v1.1.md',
+    domain: 'coastguard', 도코드: 'jeju',
     kw: ['해양경찰', '122', '해양사고', '해양레저 안전'] },
   { code: 'SP-NAT-WEATHER',      file: '09-national/agencies/SP-NAT-WEATHER_v1.1.md',
+    domain: 'weather', 도코드: 'jeju',
     kw: ['기상청', '기상특보', '태풍정보', '태풍 정보', '실시간 기상'] },
   { code: 'SP-NAT-PPS',          file: '09-national/agencies/SP-NAT-PPS_v1.1.md',
+    domain: 'pps', 도코드: 'jeju',
     kw: ['조달청', '나라장터'] },
   { code: 'SP-NAT-MMA',          file: '09-national/agencies/SP-NAT-MMA_v1.1.md',
+    domain: 'mma', 도코드: 'jeju',
     kw: ['병무청', '징병검사', '입영'] },
   { code: 'SP-NAT-VETERANS',     file: '09-national/agencies/SP-NAT-VETERANS_v1.1.md',
+    domain: 'veterans', 도코드: 'jeju',
     kw: ['보훈청', '국가유공자', '보훈급여'] },
   { code: 'SP-NAT-LABORREL',     file: '09-national/agencies/SP-NAT-LABORREL_v1.1.md',
+    domain: 'laborrel', 도코드: 'jeju',
     kw: ['노동위원회', '부당해고'] },
   { code: 'SP-NAT-PROBATION',    file: '09-national/agencies/SP-NAT-PROBATION_v1.1.md',
+    domain: 'probation', 도코드: 'jeju',
     kw: ['보호관찰', '준법지원센터', '사회봉사명령'] },
   { code: 'SP-NAT-ANIMALQUARANTINE', file: '09-national/agencies/SP-NAT-ANIMALQUARANTINE_v1.1.md',
+    domain: 'animalquarantine', 도코드: 'jeju',
     kw: ['동물검역', '가축검역', '반려동물 검역', '반려동물 동반', '축산물 반입'] },
   { code: 'SP-NAT-HUMANQUARANTINE',  file: '09-national/agencies/SP-NAT-HUMANQUARANTINE_v1.1.md',
+    domain: 'humanquarantine', 도코드: 'jeju',
     kw: ['검역소', '해외감염병', '해외 출국 예방접종', '검역감염병'] },
   { code: 'SP-NAT-AGROQUALITY',  file: '09-national/agencies/SP-NAT-AGROQUALITY_v1.1.md',
+    domain: 'agroquality', 도코드: 'jeju',
     kw: ['농산물품질관리원', '원산지표시', '친환경인증', '친환경 인증', 'GAP 인증'] },
   { code: 'SP-NAT-FISHQUALITY',  file: '09-national/agencies/SP-NAT-FISHQUALITY_v1.1.md',
+    domain: 'fishquality', 도코드: 'jeju',
     kw: ['수산물품질관리원', '수산물 원산지', '수산물 검사'] },
   { code: 'SP-NAT-FOODIMPORT',   file: '09-national/agencies/SP-NAT-FOODIMPORT_v1.1.md',
+    domain: 'foodimport', 도코드: 'jeju',
     kw: ['수입식품검사', '수입식품 통관'] },
   { code: 'SP-NAT-DATA',         file: '09-national/agencies/SP-NAT-DATA_v1.1.md',
+    domain: 'data', 도코드: 'jeju',
     kw: ['공공데이터청', '공공데이터포털'] },
   { code: 'SP-NAT-RADIO',        file: '09-national/agencies/SP-NAT-RADIO_v1.1.md',
+    domain: 'radio', 도코드: 'jeju',
     kw: ['전파관리소', '무선국'] },
   { code: 'SP-NAT-ENV',          file: '09-national/agencies/SP-NAT-ENV_v1.1.md',
+    domain: 'env', 도코드: 'jeju',
     kw: ['영산강유역환경청', '환경영향평가'] },
   { code: 'SP-NAT-LABORIMPROVE', file: '09-national/agencies/SP-NAT-LABORIMPROVE_v1.1.md',
+    domain: 'laborimprove', 도코드: 'jeju',
     kw: ['임금체불', '근로개선지도'] },
   { code: 'SP-NAT-INTERNET',     file: '09-national/agencies/SP-NAT-INTERNET_v1.1.md',
+    domain: 'internet', 도코드: 'jeju',
     kw: ['스마트쉼센터', '인터넷과의존', '스마트폰과의존'] },
   { code: 'SP-NAT-AIRPORT',      file: '09-national/agencies/SP-NAT-AIRPORT_v1.1.md',
+    domain: 'airport', 도코드: 'jeju',
     kw: ['공항공사', '제주국제공항 운영', '항공편', '제주공항', '비행기 출발', '비행기 도착', '공항 주차장', '공항 이용', '공항 분실물'] },
   { code: 'SP-NAT-PORT',         file: '09-national/agencies/SP-NAT-PORT_v1.1.md',
+    domain: 'port', 도코드: 'jeju',
     kw: ['해양수산청', '선박등록', '해상교통관제'] },
 ];
 
@@ -396,6 +424,40 @@ async function _fetchDeptText(entry) {
   return _renderDeptTemplate(template, rec);
 }
 
+// ── 국가기관(중앙정부 지역사무소) 템플릿 렌더링 (2026-07-04, 도 부서
+// 템플릿과 동일 철학) — 소속 부처·정책 지식은 전국 공통 고정 텍스트,
+// province별로 달라지는 건 관할 지역사무소 명칭(지사명)뿐이라 이것만
+// 자리표시자로 뺀다. COURT처럼 지사 대표전화가 본문에 하드코딩된 예외
+// 케이스는 개별 필드(대표전화)로 추가 파라미터화했다. ────────────────
+let _natMasterData = null;
+async function _loadNatMasterData() {
+  if (_natMasterData) return _natMasterData;
+  const raw = await _fetchText('09-national/agencies/templates/national-agency-master-data.json');
+  _natMasterData = JSON.parse(raw).기관목록;
+  return _natMasterData;
+}
+
+function _renderNatTemplate(template, rec) {
+  return template
+    .replaceAll('{지사명}', rec.지사명 || '')
+    .replaceAll('{대표전화}', rec.대표전화 || '');
+}
+
+// entry: NATIONAL_TABLE 항목. domain+도코드가 있으면 템플릿을 렌더링해
+// 반환하고, 없으면 기존처럼 static file을 그대로 반환(_fetchDeptText와
+// 동일한 폴백 철학).
+async function _fetchNatText(entry) {
+  if (!entry.domain || !entry.도코드) return _fetchText(entry.file);
+  const records = await _loadNatMasterData();
+  const rec = records.find(r => r.domain === entry.domain && r.도코드 === entry.도코드);
+  if (!rec || !rec.template) {
+    console.warn(`[Jeju] 국가기관 데이터 레코드/템플릿 없음(domain=${entry.domain}, 도코드=${entry.도코드}) — static file로 폴백`);
+    return _fetchText(entry.file);
+  }
+  const template = await _fetchText(`09-national/agencies/templates/${rec.template}`);
+  return _renderNatTemplate(template, rec);
+}
+
 // ── 시(市) 템플릿 렌더링 (2026-07-04, 도 부서 템플릿과 동일 철학이나
 // 통치구조·상하수도 소관처럼 시마다 실제로 다른 서술까지 전부 데이터
 // 필드로 뺀다 — 제주시·서귀포시조차 서로 다르다) ────────────────
@@ -517,7 +579,7 @@ async function _assembleJejuSystemPromptRaw(userText, pdvLocationHint = null, cl
     const nationalSp = await _loadNationalSp();
     parts.push(nationalSp);
     trace.push('JEJU-NATIONAL-SP');
-    const agencyText = await _fetchText(natMatch.file);
+    const agencyText = await _fetchNatText(natMatch);
     parts.push(agencyText);
     trace.push(natMatch.code);
     return { systemPrompt: parts.join('\n\n---\n\n'), trace };
@@ -612,7 +674,7 @@ async function _assembleJejuSystemPromptRaw(userText, pdvLocationHint = null, cl
       const nationalSp = await _loadNationalSp();
       nationalOnlyParts.push(nationalSp);
       const entry = _findTableEntry(classified);
-      const agencyText = await _fetchText(entry.file);
+      const agencyText = await _fetchNatText(entry);
       nationalOnlyParts.push(agencyText);
       return {
         systemPrompt: nationalOnlyParts.join('\n\n---\n\n'),
