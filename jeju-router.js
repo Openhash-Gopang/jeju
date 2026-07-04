@@ -109,8 +109,10 @@ const L2_TABLE = [
 
 const CITY_TABLE = [
   { code: 'SP-CITY-JEJU',      file: '04-city/jeju/SP-CITY-JEJU_v1.1.md',
+    도코드: 'jeju', 시코드: 'jejusi',
     kw: ['제주시', '제주시청'] },
   { code: 'SP-CITY-SEOGWIPO',  file: '04-city/seogwipo/SP-CITY-SEOGWIPO_v1.1.md',
+    도코드: 'jeju', 시코드: 'seogwipo',
     kw: ['서귀포시', '서귀포시청'] },
 ];
 
@@ -386,6 +388,44 @@ async function _fetchDeptText(entry) {
   return _renderDeptTemplate(template, rec);
 }
 
+// ── 시(市) 템플릿 렌더링 (2026-07-04, 도 부서 템플릿과 동일 철학이나
+// 통치구조·상하수도 소관처럼 시마다 실제로 다른 서술까지 전부 데이터
+// 필드로 뺀다 — 제주시·서귀포시조차 서로 다르다) ────────────────
+let _cityMasterData = null;
+async function _loadCityMasterData() {
+  if (_cityMasterData) return _cityMasterData;
+  const raw = await _fetchText('04-city/templates/city-master-data.json');
+  _cityMasterData = JSON.parse(raw).시목록;
+  return _cityMasterData;
+}
+
+function _renderCityTemplate(template, rec) {
+  return template
+    .replaceAll('{시이름}', rec.시이름 || '')
+    .replaceAll('{통치구조_문구}', rec.통치구조_문구 || '')
+    .replaceAll('{행정구역구성_문구}', rec.행정구역구성_문구 || '')
+    .replaceAll('{관할읍면동목록}', rec.관할읍면동목록 || '')
+    .replaceAll('{상하수도_capability_문구}', rec.상하수도_capability_문구 || '')
+    .replaceAll('{상하수도_설명_문구}', rec.상하수도_설명_문구 || '')
+    .replaceAll('{상하수도_예외_문구}', rec.상하수도_예외_문구 || '')
+    .replaceAll('{유의사항_추가}', rec.유의사항_추가 || '')
+    .replaceAll('{하위SP_접두어}', rec.하위SP_접두어 || '')
+    .replaceAll('{GOV_COMMON}', 'JEJU-GOV-COMMON')
+    .replaceAll('{DO_ROOT_SP}', 'SP-DO-000');
+}
+
+async function _fetchCityText(entry) {
+  if (!entry.도코드 || !entry.시코드) return _fetchText(entry.file);
+  const records = await _loadCityMasterData();
+  const rec = records.find(r => r.도코드 === entry.도코드 && r.시코드 === entry.시코드);
+  if (!rec) {
+    console.warn(`[Jeju] 시 데이터 레코드 없음(도코드=${entry.도코드}, 시코드=${entry.시코드}) — static file로 폴백`);
+    return _fetchText(entry.file);
+  }
+  const template = await _fetchText('04-city/templates/SP-CITY-TEMPLATE_v1.0.md');
+  return _renderCityTemplate(template, rec);
+}
+
 // ── 응급 즉시 처리 (사고실험 2차 §3 권고 — 최우선, 다른 어떤 매칭보다 먼저) ──
 // 분류 LLM 호출조차 기다리게 하면 안 되는 영역이라 순수 정규식으로만 판단하고,
 // 애매하면 응급 쪽으로 분류한다(오탐 비용 < 누락 비용, SP-EXP-EMERGENCY §6).
@@ -506,7 +546,7 @@ async function _assembleJejuSystemPromptRaw(userText, pdvLocationHint = null, cl
 
   if (emdMatch) {
     const cityCode = emdMatch.행정시명 === '제주시' ? CITY_TABLE[0] : CITY_TABLE[1];
-    const cityText = await _fetchText(cityCode.file);
+    const cityText = await _fetchCityText(cityCode);
     parts.push(cityText);
     trace.push(cityCode.code);
 
@@ -526,7 +566,7 @@ async function _assembleJejuSystemPromptRaw(userText, pdvLocationHint = null, cl
   // 2) 행정시만 언급(읍면동 특정 안 됨) → 시청 레이어만
   const cityOnly = _matchCity(text);
   if (cityOnly) {
-    const cityText = await _fetchText(cityOnly.file);
+    const cityText = await _fetchCityText(cityOnly);
     parts.push(cityText);
     trace.push(cityOnly.code);
     await _appendExpertIfMatched();
