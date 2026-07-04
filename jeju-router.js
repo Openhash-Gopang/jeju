@@ -43,16 +43,97 @@ async function _loadUniversalIntegrity() {
   return _universalIntegrity;
 }
 
+// 현재 유일하게 실사용 중인 도. 두 번째 도가 온보딩되면 이 상수를
+// 요청 컨텍스트(예: PDV 거주지, 서비스 호스트명)에서 결정하는 로직으로
+// 바꿔야 한다 — 지금은 하드코딩해도 정확하다(2026-07-04 기준 jeju 유일).
+const _PROVINCE_CODE = 'jeju';
+
+let _govCommonOverlayMasterData = null;
+async function _loadGovCommonOverlayMasterData() {
+  if (!_govCommonOverlayMasterData) {
+    const raw = await _fetchText('00-common/overlays/gov-common-overlay-master-data.json');
+    _govCommonOverlayMasterData = JSON.parse(raw).도목록;
+  }
+  return _govCommonOverlayMasterData;
+}
+function _renderGovCommonOverlay(template, rec) {
+  return template
+    .replaceAll('{도이름}', rec.도이름 || '')
+    .replaceAll('{행정기관목록_문구}', rec.행정기관목록_문구 || '')
+    .replaceAll('{콜센터명}', rec.콜센터명 || '')
+    .replaceAll('{콜센터번호}', rec.콜센터번호 || '')
+    .replaceAll('{출자기관예시_문구}', rec.출자기관예시_문구 || '')
+    .replaceAll('{행정시목록_문구}', rec.행정시목록_문구 || '')
+    .replaceAll('{관할예시_문구}', rec.관할예시_문구 || '');
+}
+
 async function _loadGovCommon() {
-  if (!_govCommon) _govCommon = await _fetchText('00-common/JEJU-GOV-COMMON_v1_5.md');
+  // 2026-07-04: CORE(전국 공통, 캐시 가능한 고정 prefix) + OVERLAY(도별
+  // 사실)로 분리. 캐시 변수(_govCommon)는 조합된 최종 문자열을 저장하므로
+  // 이 함수를 호출하는 다른 코드는 전혀 수정할 필요가 없다(내부만 바뀜).
+  if (!_govCommon) {
+    const [core, overlayTemplate, overlayRecords] = await Promise.all([
+      _fetchText('00-common/GOV-COMMON-CORE_v1.0.md'),
+      _fetchText('00-common/overlays/GOV-COMMON-OVERLAY-TEMPLATE_v1.0.md'),
+      _loadGovCommonOverlayMasterData(),
+    ]);
+    const rec = overlayRecords.find(r => r.도코드 === _PROVINCE_CODE);
+    if (!rec) throw new Error(`[Jeju] GOV-COMMON-OVERLAY 데이터 없음(도코드=${_PROVINCE_CODE})`);
+    const overlay = _renderGovCommonOverlay(overlayTemplate, rec);
+    _govCommon = core + '\n\n---\n\n' + overlay;
+  }
   return _govCommon;
 }
 async function _loadDoSp() {
   if (!_doSpCache) _doSpCache = await _fetchText('01-do/JEJU-DO-SP_v1.0.md');
   return _doSpCache;
 }
+
+let _natOverlayMasterData = null;
+async function _loadNatOverlayMasterData() {
+  if (!_natOverlayMasterData) {
+    const raw = await _fetchText('09-national/overlays/national-sp-overlay-master-data.json');
+    _natOverlayMasterData = JSON.parse(raw).도목록;
+  }
+  return _natOverlayMasterData;
+}
+function _renderNatOverlay(template, rec) {
+  return template.replaceAll('{도이름}', rec.도이름 || '');
+}
+
+// 구 JEJU-NATIONAL-SP §3(라우팅 테이블)·§6(레지스트리)에 해당하던 내용을
+// national-agency-master-data.json에서 매번 동적으로 생성한다 — 정적
+// 텍스트로 유지하다가 실제 완료 상태(28/28)와 어긋나 있었던 버그(2026-07-04
+// 발견)가 구조적으로 재발하지 않도록 하는 게 목적이다.
+function _renderNatCatalogSection(records, provinceCode) {
+  const rows = records.filter(r => r.도코드 === provinceCode);
+  const tableRows = rows.map(r =>
+    `| SP-NAT-${r.domain.toUpperCase()} | ${r.지사명} | ${r.소속부처 || ''} |`
+  ).join('\n');
+  return (
+    `## §3. 라우팅 테이블 (national-agency-master-data.json 기준, 매 요청 시 동적 생성)\n\n` +
+    `| 코드 | 기관명 | 소속 |\n|---|---|---|\n${tableRows}\n\n` +
+    `위 ${rows.length}개 기관 전부 개별 SP 작성이 완료된 상태다(§4 공통 폴백은 향후 신규 등록 기관을 위한 대비책으로만 유지).\n\n` +
+    `## §6. 하위 SP 레지스트리\n\n` +
+    `| 코드 | 상태 |\n|---|---|\n` +
+    rows.map(r => `| SP-NAT-${r.domain.toUpperCase()} | ✅ 완료 |`).join('\n')
+  );
+}
+
 async function _loadNationalSp() {
-  if (!_nationalSpCache) _nationalSpCache = await _fetchText('09-national/JEJU-NATIONAL-SP_v1.0.md');
+  if (!_nationalSpCache) {
+    const [core, overlayTemplate, overlayRecords, natRecords] = await Promise.all([
+      _fetchText('09-national/NATIONAL-SP-CORE_v1.0.md'),
+      _fetchText('09-national/overlays/NATIONAL-SP-OVERLAY-TEMPLATE_v1.0.md'),
+      _loadNatOverlayMasterData(),
+      _loadNatMasterData(),
+    ]);
+    const overlayRec = overlayRecords.find(r => r.도코드 === _PROVINCE_CODE);
+    if (!overlayRec) throw new Error(`[Jeju] NATIONAL-SP-OVERLAY 데이터 없음(도코드=${_PROVINCE_CODE})`);
+    const overlay = _renderNatOverlay(overlayTemplate, overlayRec);
+    const catalogSection = _renderNatCatalogSection(natRecords, _PROVINCE_CODE);
+    _nationalSpCache = core + '\n\n---\n\n' + overlay + '\n\n---\n\n' + catalogSection;
+  }
   return _nationalSpCache;
 }
 
