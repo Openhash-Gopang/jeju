@@ -13,9 +13,11 @@
  */
 
 const _RAW = 'https://raw.githubusercontent.com/Openhash-Gopang/gopang/main/prompts/Jejudo/';
+const _RAW_ROOT = 'https://raw.githubusercontent.com/Openhash-Gopang/gopang/main/prompts/';
 
 // ── 고정 접두사(GOV-COMMON) + 배타적 L1 노드(DO-SP/NATIONAL-SP) 캐시 ──
 let _govCommon = null;
+let _universalIntegrity = null;
 let _doSpCache = null;
 let _nationalSpCache = null;
 
@@ -23,6 +25,22 @@ async function _fetchText(path) {
   const r = await fetch(_RAW + path + '?t=' + Math.floor(Date.now() / 3600000)); // 1시간 캐시 버스팅
   if (!r.ok) throw new Error(`fetch 실패: ${path} (${r.status})`);
   return r.text();
+}
+
+async function _loadUniversalIntegrity() {
+  // UNIVERSAL-INTEGRITY는 prompts/ 최상위(Jejudo/ 밖)에 있어 별도 base 사용.
+  // 2026-07-04 신설 — K-Law 확신도 이원화 메커니즘을 일반화한 트랙 무관
+  // 최상위 원칙. JEJU-GOV-COMMON보다도 먼저 로드한다(§U5).
+  if (!_universalIntegrity) {
+    try {
+      const r = await fetch(_RAW_ROOT + 'UNIVERSAL-INTEGRITY_v1_0.md' + '?t=' + Math.floor(Date.now() / 3600000));
+      _universalIntegrity = r.ok ? await r.text() : '';
+    } catch (e) {
+      console.warn('[jeju-router] UNIVERSAL-INTEGRITY 로드 실패:', e.message);
+      _universalIntegrity = '';
+    }
+  }
+  return _universalIntegrity;
 }
 
 async function _loadGovCommon() {
@@ -326,18 +344,18 @@ function _isEmergency(text) {
 // pdvLocationHint: PDV에 저장된 거주 읍면동(있으면 우선 참조, JEJU-GOV-COMMON §2)
 // 반환: { systemPrompt, trace } — trace는 디버깅/로그용 체인 경로
 export async function assembleJejuSystemPrompt(userText, pdvLocationHint = null, classifyFn = null) {
-  const govCommon = await _loadGovCommon();
+  const [universalIntegrity, govCommon] = await Promise.all([_loadUniversalIntegrity(), _loadGovCommon()]);
   const text = userText || '';
-  const trace = ['JEJU-GOV-COMMON'];
-  const parts = [govCommon];
+  const trace = ['UNIVERSAL-INTEGRITY', 'JEJU-GOV-COMMON'];
+  const parts = [universalIntegrity, govCommon].filter(Boolean);
 
   // -1) 응급 감지 — 다른 모든 매칭·분류보다 먼저, 무조건 최우선.
   if (_isEmergency(text)) {
-    const emergencySp = await _fetchText('06-expert/SP-EXP-EMERGENCY_v1.1.md');
+    const emergencySp = await _fetchText('06-expert/SP-EXP-EMERGENCY_v1.0.md');
     parts.push(emergencySp);
     return {
       systemPrompt: parts.join('\n\n---\n\n'),
-      trace: ['JEJU-GOV-COMMON', 'SP-EXP-EMERGENCY', '(응급 감지 — 최우선 즉시 처리)'],
+      trace: ['UNIVERSAL-INTEGRITY', 'JEJU-GOV-COMMON', 'SP-EXP-EMERGENCY', '(응급 감지 — 최우선 즉시 처리, 참조 버그 수정: v1.1→v1.0 실존 파일)'],
     };
   }
 
