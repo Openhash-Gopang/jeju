@@ -339,26 +339,27 @@ function _isEmergency(text) {
   return EMERGENCY_RE.test(text);
 }
 
-// ── PDV_HISTORY_REQUEST(§13b) scope 결정 테이블 (2026-07-04) ─────
+// ── PDV_HISTORY_REQUEST(§13b) scope 결정 테이블 (2026-07-04d) ─────
 // trace의 마지막 SP 코드를 이 표로 조회해 §13b 자리표시자를 치환한다.
-// ktax/kpolice는 이미 전국 통합 포털(tax.hondi.net/police.hondi.net)이
-// 있어 그 scope를 그대로 재사용하고(worker.js SCOPE_SOURCE_MAP에 jeju가
-// 추가 reporter_svc로 등록돼 있다), 나머지는 jeju가 유일한 구현체라
-// jeju_ 접두어 scope를 쓴다(worker.js 사고실험 참조).
+// 국가기관 지사 26개(+ktax/kpolice)는 전부 k 접두어(전국 scope)를 쓴다 —
+// 이 기관들은 제주만의 것이 아니라 전국 시도에 동일하게 존재하는
+// 국가기관 유형이라, jeju는 그 scope의 (현재는 유일한) reporter_svc일
+// 뿐이다(worker.js SCOPE_SOURCE_MAP 참조). 반면 도 자체 부서 13개는
+// 제주도청 고유 조직명이라 jeju_ 접두어를 유지한다.
 const SP_CODE_TO_PDV_SCOPE = {
   // 국가기관 지사
   'SP-NAT-TAX': 'ktax', 'SP-NAT-POLICE': 'kpolice',
-  'SP-NAT-COURT': 'jeju_court', 'SP-NAT-NPS': 'jeju_nps', 'SP-NAT-NHIS': 'jeju_nhis',
-  'SP-NAT-IMMIGRATION': 'jeju_immigration', 'SP-NAT-POST': 'jeju_post',
-  'SP-NAT-LABOR': 'jeju_labor', 'SP-NAT-PROSECUTION': 'jeju_prosecution',
-  'SP-NAT-COASTGUARD': 'jeju_coastguard', 'SP-NAT-WEATHER': 'jeju_weather',
-  'SP-NAT-PPS': 'jeju_pps', 'SP-NAT-MMA': 'jeju_mma', 'SP-NAT-VETERANS': 'jeju_veterans',
-  'SP-NAT-LABORREL': 'jeju_laborrel', 'SP-NAT-PROBATION': 'jeju_probation',
-  'SP-NAT-ANIMALQUARANTINE': 'jeju_animalquarantine', 'SP-NAT-HUMANQUARANTINE': 'jeju_humanquarantine',
-  'SP-NAT-AGROQUALITY': 'jeju_agroquality', 'SP-NAT-FISHQUALITY': 'jeju_fishquality',
-  'SP-NAT-FOODIMPORT': 'jeju_foodimport', 'SP-NAT-DATA': 'jeju_data', 'SP-NAT-RADIO': 'jeju_radio',
-  'SP-NAT-ENV': 'jeju_env', 'SP-NAT-LABORIMPROVE': 'jeju_laborimprove',
-  'SP-NAT-INTERNET': 'jeju_internet', 'SP-NAT-AIRPORT': 'jeju_airport', 'SP-NAT-PORT': 'jeju_port',
+  'SP-NAT-COURT': 'kcourt', 'SP-NAT-NPS': 'knps', 'SP-NAT-NHIS': 'knhis',
+  'SP-NAT-IMMIGRATION': 'kimmigration', 'SP-NAT-POST': 'kpost',
+  'SP-NAT-LABOR': 'klabor', 'SP-NAT-PROSECUTION': 'kprosecution',
+  'SP-NAT-COASTGUARD': 'kcoastguard', 'SP-NAT-WEATHER': 'kweather',
+  'SP-NAT-PPS': 'kpps', 'SP-NAT-MMA': 'kmma', 'SP-NAT-VETERANS': 'kveterans',
+  'SP-NAT-LABORREL': 'klaborrel', 'SP-NAT-PROBATION': 'kprobation',
+  'SP-NAT-ANIMALQUARANTINE': 'kanimalquarantine', 'SP-NAT-HUMANQUARANTINE': 'khumanquarantine',
+  'SP-NAT-AGROQUALITY': 'kagroquality', 'SP-NAT-FISHQUALITY': 'kfishquality',
+  'SP-NAT-FOODIMPORT': 'kfoodimport', 'SP-NAT-DATA': 'kdata', 'SP-NAT-RADIO': 'kradio',
+  'SP-NAT-ENV': 'kenv', 'SP-NAT-LABORIMPROVE': 'klaborimprove',
+  'SP-NAT-INTERNET': 'kinternet', 'SP-NAT-AIRPORT': 'kairport', 'SP-NAT-PORT': 'kport',
   // 도 자체 부서
   'SP-DO-PLAN': 'jeju_plan', 'SP-DO-SAFETY': 'jeju_safety', 'SP-DO-JACHI': 'jeju_jachi',
   'SP-DO-ECON': 'jeju_econ', 'SP-DO-INNOV': 'jeju_innov', 'SP-DO-WELFARE': 'jeju_welfare',
