@@ -48,6 +48,37 @@ async function _loadUniversalIntegrity() {
 // 바꿔야 한다 — 지금은 하드코딩해도 정확하다(2026-07-04 기준 jeju 유일).
 const _PROVINCE_CODE = 'jeju';
 
+// ── kgov(SP-10_kpublic, 전국 공통) 동적 로더 (2026-07-05 신설) ──────
+// 주피터 지시: "kgov는 전국 공통 모듈, jeju는 제주도 특화 모듈이므로
+// 기능이 중복되면 안 된다. 모든 지방(제주·서울·부산 등)은 kgov를
+// 상속받는다." 이에 따라 도(道) 트리는 자체 GOV-COMMON-CORE를 발명하지
+// 않고, 실제 K-Public 서비스(gopang/prompts/SP-10_kpublic_*.txt)를 있는
+// 그대로 상속한다.
+//
+// 버전을 하드코딩하지 않고 gopang/prompts/manifest.json에서 매번 최신
+// 키를 조회한다 — kgov 버전이 나중에 v2.3, v2.4로 올라가도 이 코드를
+// 고칠 필요가 없다(하드코딩했다면 check_stale_refs.py가 잡아내려는
+// "참조가 최신 버전을 안 따라감" 문제가 그대로 재발했을 것이다).
+let _kgovSp = null;
+async function _loadKgovSp() {
+  if (_kgovSp) return _kgovSp;
+  const manifestRaw = await fetch(_RAW_ROOT + 'manifest.json?t=' + Math.floor(Date.now() / 3600000));
+  if (!manifestRaw.ok) throw new Error(`[Jeju] gopang manifest.json fetch 실패 (${manifestRaw.status})`);
+  const manifest = await manifestRaw.json();
+  const fname = manifest['SP-10_kpublic'];
+  if (!fname) throw new Error('[Jeju] manifest에 SP-10_kpublic 키 없음 — kgov SP를 찾을 수 없음');
+  const r = await fetch(_RAW_ROOT + fname + '?t=' + Math.floor(Date.now() / 3600000));
+  if (!r.ok) throw new Error(`[Jeju] kgov SP(${fname}) fetch 실패 (${r.status})`);
+  _kgovSp = await r.text();
+  return _kgovSp;
+}
+
+let _jejuTreeProtocol = null;
+async function _loadJejuTreeProtocol() {
+  if (!_jejuTreeProtocol) _jejuTreeProtocol = await _fetchText('00-common/JEJU-TREE-PROTOCOL_v1.0.md');
+  return _jejuTreeProtocol;
+}
+
 let _govCommonOverlayMasterData = null;
 async function _loadGovCommonOverlayMasterData() {
   if (!_govCommonOverlayMasterData) {
@@ -59,7 +90,6 @@ async function _loadGovCommonOverlayMasterData() {
 function _renderGovCommonOverlay(template, rec) {
   return template
     .replaceAll('{도이름}', rec.도이름 || '')
-    .replaceAll('{행정기관목록_문구}', rec.행정기관목록_문구 || '')
     .replaceAll('{콜센터명}', rec.콜센터명 || '')
     .replaceAll('{콜센터번호}', rec.콜센터번호 || '')
     .replaceAll('{출자기관예시_문구}', rec.출자기관예시_문구 || '')
@@ -68,19 +98,22 @@ function _renderGovCommonOverlay(template, rec) {
 }
 
 async function _loadGovCommon() {
-  // 2026-07-04: CORE(전국 공통, 캐시 가능한 고정 prefix) + OVERLAY(도별
-  // 사실)로 분리. 캐시 변수(_govCommon)는 조합된 최종 문자열을 저장하므로
-  // 이 함수를 호출하는 다른 코드는 전혀 수정할 필요가 없다(내부만 바뀜).
+  // 2026-07-05: GOV-COMMON-CORE(자체 발명한 "전국 공통 원칙") 폐기.
+  // kgov(전국 공통, 실사용 중인 K-Public SP) + OVERLAY(도별 사실) +
+  // JEJU-TREE-PROTOCOL(도 트리 전용 기술 프로토콜)로 대체 — 캐시 변수
+  // (_govCommon)는 조합된 최종 문자열을 저장하므로 이 함수를 호출하는
+  // 다른 코드는 전혀 수정할 필요가 없다(내부만 바뀜).
   if (!_govCommon) {
-    const [core, overlayTemplate, overlayRecords] = await Promise.all([
-      _fetchText('00-common/GOV-COMMON-CORE_v1.0.md'),
-      _fetchText('00-common/overlays/GOV-COMMON-OVERLAY-TEMPLATE_v1.0.md'),
+    const [kgov, overlayTemplate, overlayRecords, treeProtocol] = await Promise.all([
+      _loadKgovSp(),
+      _fetchText('00-common/overlays/GOV-COMMON-OVERLAY-TEMPLATE_v1.1.md'),
       _loadGovCommonOverlayMasterData(),
+      _loadJejuTreeProtocol(),
     ]);
     const rec = overlayRecords.find(r => r.도코드 === _PROVINCE_CODE);
     if (!rec) throw new Error(`[Jeju] GOV-COMMON-OVERLAY 데이터 없음(도코드=${_PROVINCE_CODE})`);
     const overlay = _renderGovCommonOverlay(overlayTemplate, rec);
-    _govCommon = core + '\n\n---\n\n' + overlay;
+    _govCommon = kgov + '\n\n---\n\n' + overlay + '\n\n---\n\n' + treeProtocol;
   }
   return _govCommon;
 }
@@ -123,7 +156,7 @@ function _renderNatCatalogSection(records, provinceCode) {
 async function _loadNationalSp() {
   if (!_nationalSpCache) {
     const [core, overlayTemplate, overlayRecords, natRecords] = await Promise.all([
-      _fetchText('09-national/NATIONAL-SP-CORE_v1.0.md'),
+      _fetchText('09-national/NATIONAL-SP-CORE_v1.1.md'),
       _fetchText('09-national/overlays/NATIONAL-SP-OVERLAY-TEMPLATE_v1.0.md'),
       _loadNatOverlayMasterData(),
       _loadNatMasterData(),
