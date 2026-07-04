@@ -71,7 +71,11 @@ const L2_TABLE = [
     kw: ['경제활력국', '소상공인', '자영업', '중소기업', '일자리', '정책자금', '경제'] },
   { code: 'SP-DO-INNOV',    file: '02-do-dept/SP-DO-INNOV_v1.1.md',
     kw: ['혁신산업국', '신재생', '풍력', '태양광', '디지털', 'AI산업', '스타트업', '산업'] },
+  // 2026-07-04: WELFARE는 템플릿+데이터 방식으로 이전한 첫 사례(proof of
+  // concept). domain/도코드가 있으면 static file 대신 템플릿을 렌더링한다
+  // — file은 하위 호환/디버깅용으로만 남겨둔다(실제로는 안 쓰임).
   { code: 'SP-DO-WELFARE',  file: '02-do-dept/SP-DO-WELFARE_v1.2.md',
+    domain: 'welfare', 도코드: 'jeju',
     kw: ['복지가족국', '보건복지여성국', '기초생활수급', '기초연금', '보육료', '어린이집', '장애인복지', '한부모',
          '복지', '임신', '출산', '육아', '보육', '장애인', '여성가족'] },
   { code: 'SP-DO-CLIMATE',  file: '02-do-dept/SP-DO-CLIMATE_v1.1.md',
@@ -330,6 +334,45 @@ function _renderEmdTemplate(template, rec) {
     + (linkedRows ? `\n\n### 렌더링된 연계 업무\n| 업무영역 | 실질 처리 주체 | 연결 SP |\n|---|---|---|\n${linkedRows}` : '');
 }
 
+// ── 도(道) 부서 템플릿 렌더링 (2026-07-04, EMD 템플릿과 동일 패턴) ──
+// L2_TABLE 항목에 domain/도코드가 있으면 템플릿+데이터로 렌더링하고,
+// 없으면(아직 이전 안 된 나머지 12개 부서) 기존 static file을 그대로
+// fetch한다 — 한 번에 다 바꾸지 않고 부서 단위로 점진 이전하기 위함.
+let _deptMasterData = null;
+async function _loadDeptMasterData() {
+  if (_deptMasterData) return _deptMasterData;
+  const raw = await _fetchText('02-do-dept/templates/do-dept-master-data.json');
+  _deptMasterData = JSON.parse(raw).부서목록;
+  return _deptMasterData;
+}
+
+function _renderDeptTemplate(template, rec) {
+  return template
+    .replaceAll('{도이름}', rec.도이름 || '')
+    .replaceAll('{부서명}', rec.부서명 || '')
+    .replaceAll('{구명칭_문구}', rec.구명칭_문구 || '')
+    .replaceAll('{산하과목록}', rec.산하과목록 || '')
+    .replaceAll('{콜센터명}', rec.콜센터명 || '')
+    .replaceAll('{콜센터번호}', rec.콜센터번호 || '')
+    .replaceAll('{콜센터운영시간}', rec.콜센터운영시간 || '')
+    .replaceAll('{GOV_COMMON}', 'JEJU-GOV-COMMON')
+    .replaceAll('{DO_ROOT_SP}', 'SP-DO-000');
+}
+
+// entry: L2_TABLE(또는 국가기관 테이블) 항목. domain+도코드가 있으면
+// 템플릿을 렌더링해 반환하고, 없으면 기존처럼 static file을 그대로 반환.
+async function _fetchDeptText(entry) {
+  if (!entry.domain || !entry.도코드) return _fetchText(entry.file);
+  const records = await _loadDeptMasterData();
+  const rec = records.find(r => r.domain === entry.domain && r.도코드 === entry.도코드);
+  if (!rec || !rec.template) {
+    console.warn(`[Jeju] 부서 데이터 레코드/템플릿 없음(domain=${entry.domain}, 도코드=${entry.도코드}) — static file로 폴백`);
+    return _fetchText(entry.file);
+  }
+  const template = await _fetchText(`02-do-dept/templates/${rec.template}`);
+  return _renderDeptTemplate(template, rec);
+}
+
 // ── 응급 즉시 처리 (사고실험 2차 §3 권고 — 최우선, 다른 어떤 매칭보다 먼저) ──
 // 분류 LLM 호출조차 기다리게 하면 안 되는 영역이라 순수 정규식으로만 판단하고,
 // 애매하면 응급 쪽으로 분류한다(오탐 비용 < 누락 비용, SP-EXP-EMERGENCY §6).
@@ -480,7 +523,7 @@ async function _assembleJejuSystemPromptRaw(userText, pdvLocationHint = null, cl
   // 3) 실국 키워드 매칭 → 규칙 A: 짧은 체인
   const divMatch = _scoreMatch(text, L2_TABLE);
   if (divMatch) {
-    const divText = await _fetchText(divMatch.file);
+    const divText = await _fetchDeptText(divMatch);
     parts.push(divText);
     trace.push(divMatch.code);
     await _appendExpertIfMatched();
@@ -517,7 +560,7 @@ async function _assembleJejuSystemPromptRaw(userText, pdvLocationHint = null, cl
     }
     const entry = _findTableEntry(classified);
     if (entry) {
-      const entryText = await _fetchText(entry.file);
+      const entryText = await _fetchDeptText(entry);
       parts.push(entryText);
       trace.push(classified, '(LLM 분류 폴백)');
       await _appendExpertIfMatched();
