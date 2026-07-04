@@ -370,6 +370,14 @@ function _renderDeptTemplate(template, rec) {
     .replaceAll('{콜센터명}', rec.콜센터명 || '')
     .replaceAll('{콜센터번호}', rec.콜센터번호 || '')
     .replaceAll('{콜센터운영시간}', rec.콜센터운영시간 || '')
+    // 2026-07-04 추가: §3 산하 출자·출연기관명 파라미터화(4개 도메인만 해당,
+    // 나머지 도메인 템플릿엔 해당 자리표시자 자체가 없어 replaceAll이 무해하게 no-op)
+    .replaceAll('{평생교육기관명}', rec.평생교육기관명 || '')
+    .replaceAll('{신용보증기관명}', rec.신용보증기관명 || '')
+    .replaceAll('{일자리기관명}', rec.일자리기관명 || '')
+    .replaceAll('{경제진흥기관명}', rec.경제진흥기관명 || '')
+    .replaceAll('{에너지공기업명}', rec.에너지공기업명 || '')
+    .replaceAll('{관광공사명}', rec.관광공사명 || '')
     .replaceAll('{GOV_COMMON}', 'JEJU-GOV-COMMON')
     .replaceAll('{DO_ROOT_SP}', 'SP-DO-000');
 }
