@@ -340,12 +340,14 @@ function _isEmergency(text) {
 }
 
 // ── PDV_HISTORY_REQUEST(§13b) scope 결정 테이블 (2026-07-04d) ─────
+// ★ scope 명명 원칙(전체 설명은 gopang/worker.js VALID_PDV_SCOPES 위 주석
+// 참조): scope 이름에 지역명을 넣지 않는다 — 다른 지역도 같은 종류의
+// 부서/기관을 가질 수 있으면 k 접두어 전국 scope로, 실제 구현 지역은
+// worker.js SCOPE_SOURCE_MAP의 reporter_svc에만 반영한다. ★
 // trace의 마지막 SP 코드를 이 표로 조회해 §13b 자리표시자를 치환한다.
-// 국가기관 지사 26개(+ktax/kpolice)는 전부 k 접두어(전국 scope)를 쓴다 —
-// 이 기관들은 제주만의 것이 아니라 전국 시도에 동일하게 존재하는
-// 국가기관 유형이라, jeju는 그 scope의 (현재는 유일한) reporter_svc일
-// 뿐이다(worker.js SCOPE_SOURCE_MAP 참조). 반면 도 자체 부서 13개는
-// 제주도청 고유 조직명이라 jeju_ 접두어를 유지한다.
+// 국가기관 지사 26개(+ktax/kpolice)와 도 자체 부서 13개 전부 이 원칙에
+// 따라 k 접두어(전국 scope)를 쓴다 — jeju는 그 scope들의 현재 유일한
+// reporter_svc일 뿐이다.
 const SP_CODE_TO_PDV_SCOPE = {
   // 국가기관 지사
   'SP-NAT-TAX': 'ktax', 'SP-NAT-POLICE': 'kpolice',
