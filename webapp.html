@@ -293,7 +293,10 @@ async function _callAIRaw(messages, latestUserText) {
   let sp = SP_FALLBACK, trace = [], agency = 'jeju_do';
   try {
     const gps = await _detectGpsLocation();
-    const locationHint = gps?.emdName || _pdvLocationHint();
+    // 우선순위: ① GPS 실시간 감지(가장 정확, 매 턴 재검증)
+    //         ② GWP facts로 넘어온 위치(메인 비서 쪽 GPS/주소 — 오리진 문제 우회)
+    //         ③ 기존 PDV 힌트(교차 오리진이라 실질적으로 항상 null)
+    const locationHint = gps?.emdName || _urlFactsLocation || _pdvLocationHint();
     const r = await window._assembleJejuSystemPrompt(latestUserText, locationHint);
     sp = r.systemPrompt;
     trace = r.trace;
@@ -474,6 +477,30 @@ function _recordPdv(userMsg, trace) {
 // ── ctx_enc=b64 분기 (GWP 새 탭 진입 시 원 질문 자동 전달) ─────
 // ── 페이지 로드 시 GPS 위치를 미리 확인 (첫 메시지 지연 방지) ──
 _detectGpsLocation();
+
+// ── facts_enc=b64 (2026-07-05 신설) — 메인 AI 비서(hondi.net)가 GWP로
+// 이 탭을 열 때 이미 확보한 부가 정보(현재는 currentLocation만, 자세한
+// 설계 근거는 gopang/src/gopang/services/location.js의 _buildRoutingFacts
+// 주석 참조). jeju.hondi.net은 별도 오리진이라 hondi.net의 localStorage를
+// 못 읽으므로(_pdvLocationHint()가 항상 null이었던 것과 동일한 원인),
+// GPS가 실패했을 때 이 값이 유일하게 남는 위치 단서가 된다.
+let _urlFactsLocation = null;
+(function initFacts() {
+  try {
+    const params = new URLSearchParams(location.search);
+    const factsRaw = params.get('facts') || '';
+    const factsEnc = params.get('facts_enc');
+    if (!factsRaw) return;
+    const json = factsEnc === 'b64'
+      ? decodeURIComponent(escape(atob(factsRaw)))
+      : decodeURIComponent(factsRaw);
+    const facts = JSON.parse(json);
+    if (facts && typeof facts.currentLocation === 'string') {
+      _urlFactsLocation = facts.currentLocation;
+      console.log('[Jeju] GWP facts로 위치 힌트 수신:', _urlFactsLocation);
+    }
+  } catch (e) { console.warn('[Jeju] facts 파싱 실패(무시):', e.message); }
+})();
 
 (function initCtx() {
   const params = new URLSearchParams(location.search);
