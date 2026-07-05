@@ -127,8 +127,9 @@ html,body{height:100%;height:100dvh;overflow:hidden;
 <div class="toast" id="mob-toast"></div>
 
 <script type="module">
-import { assembleJejuSystemPrompt } from '/jeju-router.js';
+import { assembleJejuSystemPrompt, resolveJejuAgency } from '/jeju-router.js';
 window._assembleJejuSystemPrompt = assembleJejuSystemPrompt;
+window._resolveJejuAgency = resolveJejuAgency;
 </script>
 
 <script>
@@ -237,23 +238,50 @@ function _parsePdvRequestTag(text) {
   };
 }
 
-// ── 원시 채팅 완성 호출 (DeepSeek → Claude 폴백) ─────────────────
-async function _rawChatCompletion(sp, messages) {
+// ── 사용자 식별자(guid=ipv6) 확보 ────────────────────────────────
+function _getUserGuid() {
   try {
-    const r = await fetch(`${PROXY}/ai/chat`, {
+    const token = JSON.parse(sessionStorage.getItem('gopang_sso_token') || '{}');
+    return token.ipv6 || 'anonymous';
+  } catch (e) { return 'anonymous'; }
+}
+
+// ── /gov/relay 호출 (2026-07-05: /ai/chat 직접 호출에서 이전) ───────
+// 그동안 jeju-router.js가 UNIVERSAL-INTEGRITY까지만 클라이언트에서 직접
+// 붙이고 /ai/chat으로 바로 쏘던 경로라, UNIVERSAL-common(U1~U9, 특히
+// SP 간 호출 프로토콜 U9)이 전혀 적용되지 않고 있었다. /gov/relay는
+// UNIVERSAL-INTEGRITY + UNIVERSAL-common을 서버가 강제로 맨 앞에 붙이므로
+// (클라이언트가 빠뜨리거나 조작 불가 — SP-COMMON-05 H2), 이제부터 sp
+// 변수는 "JEJU-GOV-COMMON 이하"만 담당하고 agencyPrompt로 전달한다.
+// agency는 jeju-router.js의 resolveJejuAgency(trace)가 국가기관/도청
+// 트리 중 실제로 어느 쪽이 선택됐는지에 따라 'jeju_national'|'jeju_do'로
+// 정해준다 — worker.js의 GOV_AGENCIES/SP_DELEGATION_REGISTRY 키와 반드시
+// 동일해야 한다(어긋나면 UNKNOWN_AGENCY로 조용히 거부됨).
+// jeju_do/jeju_national은 SP_DELEGATION_ORIGINATORS(위임 시작 가능)라
+// 서버가 stream을 강제로 끄므로 여기서도 stream:false로 요청한다.
+async function _govRelayCompletion(agencyPrompt, messages, agency) {
+  const guid = _getUserGuid();
+  try {
+    const r = await fetch(`${PROXY}/gov/relay`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ provider:'deepseek', model:'deepseek-chat', system:sp, messages, max_tokens:2000 }),
+      body: JSON.stringify({ guid, agency, agencyPrompt, messages, max_tokens: 2000, stream: false, tier: 'gov-flash' }),
     });
-    if (!r.ok) throw new Error(`proxy ${r.status}`);
+    if (!r.ok) {
+      const errBody = await r.json().catch(() => ({}));
+      if (r.status === 429) {
+        return errBody.detail || '오늘 이용 가능한 한도를 모두 사용했습니다. 내일 다시 이용해 주세요.';
+      }
+      throw new Error(`gov/relay ${r.status}: ${errBody.detail || ''}`);
+    }
     const d = await r.json();
-    return d.content || '잠시 후 다시 시도해 주세요.';
+    return d.choices?.[0]?.message?.content || '잠시 후 다시 시도해 주세요.';
   } catch(e) {
-    console.warn('[Jeju] DeepSeek 폴백 → Claude:', e.message);
+    console.warn('[Jeju] gov/relay 실패 → Claude 폴백:', e.message);
     const r2 = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model:'claude-sonnet-4-20250514', max_tokens:1000, system:sp, messages:messages.slice(-8) }),
+      body: JSON.stringify({ model:'claude-sonnet-4-20250514', max_tokens:1000, system:agencyPrompt, messages:messages.slice(-8) }),
     });
     const d2 = await r2.json();
     return d2.content?.find(c => c.type === 'text')?.text || '오류가 발생했습니다.';
@@ -262,20 +290,21 @@ async function _rawChatCompletion(sp, messages) {
 
 // ── AI 호출(원본) — 라우터로 SP 동적 조립 + PDV 중개(§13) 2단계 흐름 ──
 async function _callAIRaw(messages, latestUserText) {
-  let sp = SP_FALLBACK, trace = [];
+  let sp = SP_FALLBACK, trace = [], agency = 'jeju_do';
   try {
     const gps = await _detectGpsLocation();
     const locationHint = gps?.emdName || _pdvLocationHint();
     const r = await window._assembleJejuSystemPrompt(latestUserText, locationHint);
     sp = r.systemPrompt;
     trace = r.trace;
+    agency = window._resolveJejuAgency(trace);
   } catch (e) {
     console.warn('[Jeju] SP 조립 실패, 폴백 사용:', e.message);
   }
   document.getElementById('trace-badge').textContent = trace.join(' > ');
   document.getElementById('trace-badge').style.display = trace.length ? 'inline-block' : 'none';
 
-  let text = await _rawChatCompletion(sp, messages);
+  let text = await _govRelayCompletion(sp, messages, agency);
 
   // Step 5 연장: SP가 PDV 필드를 요청했으면 나만의 AI 비서에게 중개 요청
   const pdvReq = _parsePdvRequestTag(text);
@@ -299,7 +328,7 @@ async function _callAIRaw(messages, latestUserText) {
       { role: 'assistant', content: text },
       { role: 'user', content: pdvContext },
     ];
-    text = await _rawChatCompletion(sp, followup);
+    text = await _govRelayCompletion(sp, followup, agency);
   }
 
   return { text, trace };

@@ -17,7 +17,6 @@ const _RAW_ROOT = 'https://raw.githubusercontent.com/Openhash-Gopang/gopang/main
 
 // ── 고정 접두사(GOV-COMMON) + 배타적 L1 노드(DO-SP/NATIONAL-SP) 캐시 ──
 let _govCommon = null;
-let _universalIntegrity = null;
 let _doSpCache = null;
 let _nationalSpCache = null;
 
@@ -25,22 +24,6 @@ async function _fetchText(path) {
   const r = await fetch(_RAW + path + '?t=' + Math.floor(Date.now() / 3600000)); // 1시간 캐시 버스팅
   if (!r.ok) throw new Error(`fetch 실패: ${path} (${r.status})`);
   return r.text();
-}
-
-async function _loadUniversalIntegrity() {
-  // UNIVERSAL-INTEGRITY는 prompts/ 최상위(Jejudo/ 밖)에 있어 별도 base 사용.
-  // 2026-07-04 신설 — K-Law 확신도 이원화 메커니즘을 일반화한 트랙 무관
-  // 최상위 원칙. JEJU-GOV-COMMON보다도 먼저 로드한다(§U5).
-  if (!_universalIntegrity) {
-    try {
-      const r = await fetch(_RAW_ROOT + 'UNIVERSAL-INTEGRITY_v1_0.md' + '?t=' + Math.floor(Date.now() / 3600000));
-      _universalIntegrity = r.ok ? await r.text() : '';
-    } catch (e) {
-      console.warn('[jeju-router] UNIVERSAL-INTEGRITY 로드 실패:', e.message);
-      _universalIntegrity = '';
-    }
-  }
-  return _universalIntegrity;
 }
 
 // 현재 유일하게 실사용 중인 도. 두 번째 도가 온보딩되면 이 상수를
@@ -671,10 +654,17 @@ function _resolvePdvScopeFromTrace(trace) {
 // 반환 지점이 8곳 넘게 흩어진 이 함수 내부를 전부 건드리지 않고 한 곳에서
 // 처리하기 위함(호출부 입장에서 동작은 완전히 동일, 순수 후처리 wrapper).
 async function _assembleJejuSystemPromptRaw(userText, pdvLocationHint = null, classifyFn = null) {
-  const [universalIntegrity, govCommon] = await Promise.all([_loadUniversalIntegrity(), _loadGovCommon()]);
+  // 2026-07-05: UNIVERSAL-INTEGRITY를 여기서 fetch/삽입하던 걸 제거했다.
+  // jeju-router.js는 이제 /ai/chat이 아니라 /gov/relay를 호출하고,
+  // handleGovRelay()가 UNIVERSAL-INTEGRITY + UNIVERSAL-common(U9 포함)을
+  // 항상 최상단에 서버측에서 붙인다(SP-COMMON-05 H2 원칙 — 클라이언트가
+  // 공통 규칙을 빠뜨리거나 조작할 여지를 구조적으로 없앤다). 이 함수가
+  // 반환하는 systemPrompt는 이제 "agencyPrompt"(JEJU-GOV-COMMON 이하)에
+  // 해당하는 부분만 담당한다.
+  const govCommon = await _loadGovCommon();
   const text = userText || '';
-  const trace = ['UNIVERSAL-INTEGRITY', 'JEJU-GOV-COMMON'];
-  const parts = [universalIntegrity, govCommon].filter(Boolean);
+  const trace = ['JEJU-GOV-COMMON'];
+  const parts = [govCommon].filter(Boolean);
 
   // -1) 응급 감지 — 다른 모든 매칭·분류보다 먼저, 무조건 최우선.
   if (_isEmergency(text)) {
@@ -682,7 +672,7 @@ async function _assembleJejuSystemPromptRaw(userText, pdvLocationHint = null, cl
     parts.push(emergencySp);
     return {
       systemPrompt: parts.join('\n\n---\n\n'),
-      trace: ['UNIVERSAL-INTEGRITY', 'JEJU-GOV-COMMON', 'SP-EXP-EMERGENCY', '(응급 감지 — 최우선 즉시 처리, 참조 버그 수정: v1.1→v1.0 실존 파일)'],
+      trace: ['JEJU-GOV-COMMON', 'SP-EXP-EMERGENCY', '(응급 감지 — 최우선 즉시 처리)'],
     };
   }
 
@@ -820,6 +810,15 @@ async function _assembleJejuSystemPromptRaw(userText, pdvLocationHint = null, cl
 // scope 값을 추측하지 않게 한다(2026-07-04, 사고실험에서 발견된
 // police/public/911 scope 불일치 버그와 동일 계열 문제를 jeju에서는
 // 애초에 만들지 않기 위함).
+// trace를 보고 /gov/relay에 넘길 agency 값을 판정한다 — worker.js
+// GOV_AGENCIES/SP_DELEGATION_REGISTRY의 'jeju_do'/'jeju_national'과
+// 반드시 동일한 문자열이어야 한다(어긋나면 UNKNOWN_AGENCY로 조용히
+// 거부되는 사고가 난다 — SP-00-ROUTER v5.1 manifest 누락과 동일 유형).
+export function resolveJejuAgency(trace) {
+  return (trace || []).includes('JEJU-NATIONAL-SP') ? 'jeju_national' : 'jeju_do';
+}
+window.resolveJejuAgency = resolveJejuAgency;
+
 export async function assembleJejuSystemPrompt(userText, pdvLocationHint = null, classifyFn = null) {
   const result = await _assembleJejuSystemPromptRaw(userText, pdvLocationHint, classifyFn);
   if (!_PDV_HISTORY_SCOPE_PLACEHOLDER_RE.test(result.systemPrompt)) return result;
