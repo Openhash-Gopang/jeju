@@ -301,6 +301,7 @@ async function _callAIRaw(messages, latestUserText) {
     sp = r.systemPrompt;
     trace = r.trace;
     agency = window._resolveJejuAgency(trace);
+    _lastAgency = agency;
   } catch (e) {
     console.warn('[Jeju] SP 조립 실패, 폴백 사용:', e.message);
   }
@@ -384,6 +385,14 @@ function updateSendBtn() {
 
 let hist = [];
 let mc = 0;
+
+// ── GWP_DONE 보고용 세션 메타(2026-07-09 신설) ──────────────────────
+// _lastAgency는 _callAIRaw()가 매 턴 jeju-router.js로 재계산할 때마다
+// 갱신된다 — pagehide 시점에 "마지막으로 상담한 기관이 어디였는지"를
+// 알아야 하므로 모듈 스코프에 캐시해둔다.
+let _lastAgency = 'jeju_do';
+const _gwpSessionId = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(36).slice(2));
+const _gwpSessionStartedAt = new Date().toISOString();
 
 function hideIntro() {
   const intro = document.getElementById('intro-section');
@@ -551,5 +560,32 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 });
 </script>
+
+<script>
+// ── GWP_DONE 보고 — 공유모듈(gwp-report-client.js) 동적 import ──────
+// 다른 15개 K-서비스와 통합할 로컬 복사본을 새로 만드는 대신, 이미
+// 검증된 단일 소스를 그대로 가져다 쓴다(auth/subsystem-auth.js와 동일
+// 크로스오리진 패턴). window.opener가 있을 때만(=GWP 경유 접속) 의미가
+// 있고, 대화가 자유형이라 "완료" 시점이 없으므로 pagehide(탭을 실제로
+// 떠나는 순간) 1회에만 발신한다 — 매 턴 발신 시 engine.js가 즉시 탭을
+// 닫아버려 대화가 끊기므로 절대 금지.
+window.addEventListener('pagehide', () => {
+  if (!window.opener || !hist.length) return;
+  import('https://hondi.net/src/gopang/gwp/gwp-report-client.js')
+    .then(({ reportGwpSessionEnd }) => reportGwpSessionEnd({
+      agencyId: _lastAgency || 'jeju_do',
+      guid: _getUserGuid(),
+      messages: hist,
+      resultText: hist[hist.length - 1]?.content || '',
+      summaryLine: `${_lastAgency || 'jeju'} 상담 종료`,
+      gwpMode: true,
+      gwpOrigin: 'https://hondi.net',
+      sessionId: _gwpSessionId,
+      sessionStartedAt: _gwpSessionStartedAt,
+    }))
+    .catch(() => {}); // pagehide 중 실패는 조용히 무시 — 이미 최선을 다한 상태
+});
+</script>
+
 </body>
 </html>
