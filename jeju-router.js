@@ -101,7 +101,7 @@ async function _loadGovCommon() {
   return _govCommon;
 }
 async function _loadDoSp() {
-  if (!_doSpCache) _doSpCache = await _fetchText('01-do/JEJU-DO-SP_v1.0.md');
+  if (!_doSpCache) _doSpCache = await _fetchText('01-do/JEJU-DO-SP_v1.5.md');
   return _doSpCache;
 }
 
@@ -139,7 +139,7 @@ function _renderNatCatalogSection(records, provinceCode) {
 async function _loadNationalSp() {
   if (!_nationalSpCache) {
     const [core, overlayTemplate, overlayRecords, natRecords] = await Promise.all([
-      _fetchText('09-national/NATIONAL-SP-CORE_v1.1.md'),
+      _fetchText('09-national/NATIONAL-SP-CORE_v1.2.md'),
       _fetchText('09-national/overlays/NATIONAL-SP-OVERLAY-TEMPLATE_v1.0.md'),
       _loadNatOverlayMasterData(),
       _loadNatMasterData(),
