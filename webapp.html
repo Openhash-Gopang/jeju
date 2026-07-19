@@ -487,10 +487,9 @@ let mc = 0;
 // 알아야 하므로 모듈 스코프에 캐시해둔다.
 let _lastAgency = 'jeju_do';
 // G19(HUMAN-AUTHORITY-GATE-SCHEMA) — 이 세션 중 사용자가 GWP_DOC_RESPONSE로
-// 첨부한 외부 발급 서류 누적. GWP_DONE 보고 시 pdvData/summary와 함께 실어
-// G18(STAFF_REVIEW_GATE) 산출물 번들로 담당부서에 전달돼야 한다 — 그
-// 연결(gwp-report-client.js 쪽 페이로드 확장)은 별도 배선 필요, 여기서는
-// 세션 내 확보·누적까지만 담당한다(TODO 아님 — 의도된 범위 경계).
+// 첨부한 외부 발급 서류(보조 경로) 누적. pagehide 시 GWP_DONE의
+// attachedDocs로 실려 G18(STAFF_REVIEW_GATE) 산출물 번들 메타데이터로
+// PDV에 기록된다(2026-07-19 연결 완료 — engine.js/gwp-report-client.js).
 let _acquiredDocs = [];
 const _gwpSessionId = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(36).slice(2));
 const _gwpSessionStartedAt = new Date().toISOString();
@@ -818,6 +817,17 @@ window.addEventListener('pagehide', () => {
       gwpOrigin: 'https://hondi.net',
       sessionId: _gwpSessionId,
       sessionStartedAt: _gwpSessionStartedAt,
+      // G18(STAFF_REVIEW_GATE) 산출물 번들 연결(2026-07-19) — base64
+      // 원본은 넘기지 않는다(이미 요청 탭 자신의 대화에 실려 kgov
+      // GOV_TASK_SUBMIT_REQUEST로 처리 완료됨 — G19 정정 참고). 여기서는
+      // "이 세션 중 무엇을 확보했는지" 메타데이터만 남긴다.
+      attachedDocs: _acquiredDocs.map(d => ({
+        docType: d.docType,
+        fileName: d.file?.name || null,
+        mime: d.file?.mime || null,
+        size: d.file?.size || null,
+        acquiredAt: d.acquiredAt,
+      })),
     }))
     .catch(() => {}); // pagehide 중 실패는 조용히 무시 — 이미 최선을 다한 상태
 });
