@@ -27,6 +27,15 @@ const NAT_AGENCY_MASTER = { 기관목록: [
   { 도코드: 'jeju', domain: 'nhis', 지사명: '국민건강보험공단 제주지사', 소속부처: '보건복지부' },
   { 도코드: 'jeju', domain: 'immigration', 지사명: '제주출입국·외국인청', 소속부처: '법무부' },
 ] };
+// 2026-07-19 신설 — SP-PROVINCE-TEMPLATE 렌더링 경로(정적 파일 폴백이
+// 아니라) 실제 정상 케이스를 검증하기 위한 최소 목. jeju 레코드 하나만
+// 두고, 거버넌스구조.계층모델이 결과 텍스트에 실제로 반영되는지까지 확인.
+const PROVINCE_MASTER = { 도목록: [
+  { 도코드: 'jeju', 도이름: '제주특별자치도', 통치구조_문구: '단층제 특별자치도',
+    이원화_문구: '', 인접기관_문구: '행정시', 광역출력_문구: '행정시 창구 연결',
+    위임사무_문구: '위임사무 문구', 하위SP_접두어: 'SP-DO', 유의사항_추가: '유의사항',
+    거버넌스구조: { 계층모델: 'TWO_TIER_ADMIN_CITY' } },
+] };
 
 globalThis.fetch = async (url) => {
   const u = String(url);
@@ -39,6 +48,7 @@ globalThis.fetch = async (url) => {
     if (u.includes('national-agency-master-data.json')) return { ok: true, text: async () => JSON.stringify(NAT_AGENCY_MASTER) };
     if (u.includes('do-dept-master-data.json')) return { ok: true, text: async () => JSON.stringify({ 부서목록: [] }) }; // 빈 배열 → 의도된 static file 폴백 경로로 감
     if (u.includes('city-master-data.json')) return { ok: true, text: async () => JSON.stringify({ 시목록: [] }) };
+    if (u.includes('province-master-data.json')) return { ok: true, text: async () => JSON.stringify(PROVINCE_MASTER) }; // 2026-07-19 신설 — 템플릿 정상 경로 검증용
     return { ok: true, text: async () => '{}' };
   }
   // .md 등 나머지 전부 — 플레이스홀더 텍스트(내용은 trace 검증과 무관)
@@ -91,6 +101,25 @@ const CASES = [
 ];
 
 let pass = 0, fail = 0, info = 0;
+
+// ── 2026-07-19 신설 — SP-PROVINCE-TEMPLATE 정상 렌더링 검증 ──────────
+// _loadDoSp()는 실패 시 조용히 정적 파일로 폴백하므로(의도된 동작),
+// "폴백이 아니라 템플릿 경로를 실제로 탔는지"는 trace만으로 구분되지
+// 않는다. console.warn을 가로채 폴백 경고가 안 찍히는지로 검증한다.
+{
+  const warnings = [];
+  const originalWarn = console.warn;
+  console.warn = (...args) => { warnings.push(args.join(' ')); originalWarn(...args); };
+  const r = await assembleJejuSystemPrompt('지방세 취득세 납부 기한이 언제인가요');
+  console.warn = originalWarn;
+  const fellBack = warnings.some(w => w.includes('SP-PROVINCE-TEMPLATE 렌더링 실패'));
+  if (!fellBack) {
+    pass++; console.log('✅ [신설] SP-PROVINCE-TEMPLATE 정상 경로(폴백 없음) 확인');
+  } else {
+    fail++; console.log('❌ [신설] SP-PROVINCE-TEMPLATE가 폴백으로 빠짐:', warnings);
+  }
+}
+
 for (const c of CASES) {
   const r = await assembleJejuSystemPrompt(c.text, c.locationHint || null, c.useClassify ? mockClassify : null);
   const agency = resolveJejuAgency(r.trace);
@@ -114,5 +143,5 @@ for (const c of CASES) {
   }
 }
 
-console.log(`\n총 ${CASES.length}건 — 판정 가능 ${pass + fail}건 중 통과 ${pass} / 실패 ${fail} / 참고용 ${info}건`);
+console.log(`\n총 ${CASES.length + 1}건(CASES ${CASES.length} + 신설 1) — 판정 가능 ${pass + fail}건 중 통과 ${pass} / 실패 ${fail} / 참고용 ${info}건`);
 process.exit(fail > 0 ? 1 : 0);

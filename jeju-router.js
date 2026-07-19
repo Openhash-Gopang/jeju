@@ -26,10 +26,23 @@ async function _fetchText(path) {
   return r.text();
 }
 
-// 현재 유일하게 실사용 중인 도. 두 번째 도가 온보딩되면 이 상수를
-// 요청 컨텍스트(예: PDV 거주지, 서비스 호스트명)에서 결정하는 로직으로
-// 바꿔야 한다 — 지금은 하드코딩해도 정확하다(2026-07-04 기준 jeju 유일).
-const _PROVINCE_CODE = 'jeju';
+// ── 도코드 해석 (2026-07-19 배선 — 하드코딩 제거) ──────────────────
+// 기존엔 상수로 고정돼 있었다("두 번째 도가 온보딩되면 고쳐야 한다"고
+// 스스로 예언해뒀던 부분). 지금은 province-master-data.json에 경기·
+// 서울·부산 등 8개 도 레코드가 이미 조사돼 있으므로(2026-07-19 배선
+// 작업 계기) 더 이상 미룰 이유가 없다.
+//
+// 결정 순서: (1) window.HONDI_PROVINCE_CODE — 배포 시점에 주입하는
+// 명시적 오버라이드(예: gyeonggi.hondi.net처럼 도별 서브도메인을 둘
+// 경우 그 배포의 index.html/webapp.html이 이 값을 설정). (2) 없으면
+// 'jeju' — 현재 유일하게 배포된 jeju.hondi.net과 100% 하위호환.
+//
+// 아직 안 정한 것(사용자 판단 대기): 도별 서브도메인 다중 배포 vs
+// 단일 라우터가 PDV 거주지/호스트명으로 도를 자동 판별하는 통합형 —
+// 이 함수는 어느 쪽으로 가든 호출부를 다시 안 고쳐도 되게만 만든다.
+function _resolveProvinceCode() {
+  return (typeof window !== 'undefined' && window.HONDI_PROVINCE_CODE) || 'jeju';
+}
 
 // ── kgov(SP-10_kpublic, 전국 공통) 동적 로더 (2026-07-05 신설) ──────
 // 주피터 지시: "kgov는 전국 공통 모듈, jeju는 제주도 특화 모듈이므로
@@ -87,21 +100,64 @@ async function _loadGovCommon() {
   // (_govCommon)는 조합된 최종 문자열을 저장하므로 이 함수를 호출하는
   // 다른 코드는 전혀 수정할 필요가 없다(내부만 바뀜).
   if (!_govCommon) {
+    const provinceCode = _resolveProvinceCode();
     const [kgov, overlayTemplate, overlayRecords, treeProtocol] = await Promise.all([
       _loadKgovSp(),
       _fetchText('00-common/overlays/GOV-COMMON-OVERLAY-TEMPLATE_v1.1.md'),
       _loadGovCommonOverlayMasterData(),
       _loadJejuTreeProtocol(),
     ]);
-    const rec = overlayRecords.find(r => r.도코드 === _PROVINCE_CODE);
-    if (!rec) throw new Error(`[Jeju] GOV-COMMON-OVERLAY 데이터 없음(도코드=${_PROVINCE_CODE})`);
+    const rec = overlayRecords.find(r => r.도코드 === provinceCode);
+    if (!rec) throw new Error(`[Jeju] GOV-COMMON-OVERLAY 데이터 없음(도코드=${provinceCode})`);
     const overlay = _renderGovCommonOverlay(overlayTemplate, rec);
     _govCommon = kgov + '\n\n---\n\n' + overlay + '\n\n---\n\n' + treeProtocol;
   }
   return _govCommon;
 }
+
+// ── L1(SP-DO-000) 로딩 — SP-PROVINCE-TEMPLATE 렌더링으로 전환 (2026-07-19) ──
+// 기존엔 제주 정적 파일(JEJU-DO-SP_v1.5.md) 하나만 fetch했다. 이제
+// province-master-data.json에 도코드 레코드가 있으면 템플릿을 렌더링해
+// 쓰고, 레코드가 없으면(아직 온보딩 안 된 도, 또는 jeju 자신의 데이터
+// 로드 실패 시) 기존 정적 파일로 폴백한다 — L2/시/국가기관 로더가 이미
+// 쓰고 있는 "템플릿 우선, 정적 파일 폴백" 패턴(_fetchDeptText 등)과
+// 동일 철학. jeju는 두 경로 모두 존재하므로(province-master-data.json에
+// jeju 레코드 신설 완료) 정상 케이스에서는 템플릿 경로를 탄다.
+let _provinceMasterData = null;
+async function _loadProvinceMasterData() {
+  if (!_provinceMasterData) {
+    const raw = await _fetchText('01-do/templates/province-master-data.json');
+    _provinceMasterData = JSON.parse(raw).도목록;
+  }
+  return _provinceMasterData;
+}
+function _renderProvinceTemplate(template, rec) {
+  return template
+    .replaceAll('{도이름}', rec.도이름 || '')
+    .replaceAll('{도코드}', rec.도코드 || '')
+    .replaceAll('{통치구조_문구}', rec.통치구조_문구 || '')
+    .replaceAll('{이원화_문구}', rec.이원화_문구 || '')
+    .replaceAll('{인접기관_문구}', rec.인접기관_문구 || '')
+    .replaceAll('{광역출력_문구}', rec.광역출력_문구 || '')
+    .replaceAll('{위임사무_문구}', rec.위임사무_문구 || '')
+    .replaceAll('{하위SP_접두어}', rec.하위SP_접두어 || '')
+    .replaceAll('{유의사항_추가}', rec.유의사항_추가 || '');
+}
 async function _loadDoSp() {
-  if (!_doSpCache) _doSpCache = await _fetchText('01-do/JEJU-DO-SP_v1.5.md');
+  if (_doSpCache) return _doSpCache;
+  const provinceCode = _resolveProvinceCode();
+  try {
+    const [template, records] = await Promise.all([
+      _fetchText('01-do/templates/SP-PROVINCE-TEMPLATE_v1.1.md'),
+      _loadProvinceMasterData(),
+    ]);
+    const rec = records.find(r => r.도코드 === provinceCode);
+    if (!rec) throw new Error(`province-master-data.json에 도코드=${provinceCode} 레코드 없음`);
+    _doSpCache = _renderProvinceTemplate(template, rec);
+  } catch (e) {
+    console.warn(`[Jeju] SP-PROVINCE-TEMPLATE 렌더링 실패(${e.message}) — 정적 파일로 폴백`);
+    _doSpCache = await _fetchText('01-do/JEJU-DO-SP_v1.5.md');
+  }
   return _doSpCache;
 }
 
@@ -138,16 +194,17 @@ function _renderNatCatalogSection(records, provinceCode) {
 
 async function _loadNationalSp() {
   if (!_nationalSpCache) {
+    const provinceCode = _resolveProvinceCode();
     const [core, overlayTemplate, overlayRecords, natRecords] = await Promise.all([
       _fetchText('09-national/NATIONAL-SP-CORE_v1.2.md'),
       _fetchText('09-national/overlays/NATIONAL-SP-OVERLAY-TEMPLATE_v1.0.md'),
       _loadNatOverlayMasterData(),
       _loadNatMasterData(),
     ]);
-    const overlayRec = overlayRecords.find(r => r.도코드 === _PROVINCE_CODE);
-    if (!overlayRec) throw new Error(`[Jeju] NATIONAL-SP-OVERLAY 데이터 없음(도코드=${_PROVINCE_CODE})`);
+    const overlayRec = overlayRecords.find(r => r.도코드 === provinceCode);
+    if (!overlayRec) throw new Error(`[Jeju] NATIONAL-SP-OVERLAY 데이터 없음(도코드=${provinceCode})`);
     const overlay = _renderNatOverlay(overlayTemplate, overlayRec);
-    const catalogSection = _renderNatCatalogSection(natRecords, _PROVINCE_CODE);
+    const catalogSection = _renderNatCatalogSection(natRecords, provinceCode);
     _nationalSpCache = core + '\n\n---\n\n' + overlay + '\n\n---\n\n' + catalogSection;
   }
   return _nationalSpCache;
