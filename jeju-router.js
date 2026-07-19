@@ -214,7 +214,7 @@ async function _loadNationalSp() {
 // 각 항목: 코드, 파일 경로, 매칭 키워드. 여러 항목이 매칭되면 키워드
 // 개수가 가장 많이 일치하는 쪽을 우선한다(단순 스코어링 — v1.1에서
 // LLM 기반 분류로 고도화 검토).
-const L2_TABLE = [
+const JEJU_L2_TABLE = [
   { code: 'SP-DO-PLAN',     file: '02-do-dept/SP-DO-PLAN_v1.1.md',
     domain: 'plan', 도코드: 'jeju',
     kw: ['기획조정실', '고향사랑기부', '세정', '지방세', '취득세', '재산세', '청년정책', '인구정책', '예산', '기획'] },
@@ -261,7 +261,7 @@ const L2_TABLE = [
     kw: ['해양수산국', '어업면허', '마을어장', '수산업', '양식업', '어업', '수산'] },
 ];
 
-const CITY_TABLE = [
+const JEJU_CITY_TABLE = [
   { code: 'SP-CITY-JEJU',      file: '04-city/jeju/SP-CITY-JEJU_v1.1.md',
     도코드: 'jeju', 시코드: 'jejusi',
     kw: ['제주시', '제주시청'] },
@@ -274,7 +274,7 @@ const CITY_TABLE = [
 // 도청 트리(JEJU-DO-SP)와 형제 관계 — 매칭되면 DO-SP 대신 이쪽으로 간다.
 // 지방세(도청)와 국세(세무서) 혼동 방지를 위해 '세금' 같은 범용어는 넣지
 // 않고, 국가기관임이 분명한 고유명사만 트리거로 쓴다.
-const NATIONAL_TABLE = [
+const JEJU_NATIONAL_TABLE = [
   { code: 'SP-NAT-TAX',          file: '09-national/agencies/SP-NAT-TAX_v1.2.md',
     domain: 'tax', 도코드: 'jeju',
     kw: ['세무서', '국세', '종합소득세', '부가가치세', '법인세', '홈택스'] },
@@ -366,8 +366,23 @@ const NATIONAL_TABLE = [
 // 새 기관이 추가되고 SP가 아직 없을 때를 위해 매커니즘은 유지한다.
 const CATALOG_ONLY = [];
 
+// ── 도별 라우팅 테이블 레지스트리 (2026-07-19 전국 확장 Phase 1) ────────
+// province-master-data.json(도 단위 SP)과 같은 원칙을 L2(실·국)/시/국가기관
+// 라우팅 테이블에도 적용한다 — 지금은 jeju 값만 있지만, 다른 도가 추가될 때
+// GYEONGGI_L2_TABLE 등을 새로 선언하고 여기 레지스트리에 키만 추가하면 된다
+// (이 파일의 매칭 로직·호출부는 전혀 안 고쳐도 됨). 실제 fetch로 데이터를
+// 옮기는 것(province-master-data.json처럼)까지는 아직 안 갔다 — 부서명·
+// 키워드가 도마다 실사로 달라서(Phase 2 영역) 지금은 "코드 구조만
+// province-agnostic화"까지가 정직한 범위다.
+const PROVINCE_TABLES = {
+  jeju: { l2: JEJU_L2_TABLE, city: JEJU_CITY_TABLE, national: JEJU_NATIONAL_TABLE },
+};
+function _l2Table() { return PROVINCE_TABLES[_resolveProvinceCode()]?.l2 || []; }
+function _cityTable() { return PROVINCE_TABLES[_resolveProvinceCode()]?.city || []; }
+function _nationalTable() { return PROVINCE_TABLES[_resolveProvinceCode()]?.national || []; }
+
 function _matchNational(text) {
-  return _scoreMatch(text, NATIONAL_TABLE);
+  return _scoreMatch(text, _nationalTable());
 }
 function _matchCatalogOnly(text) {
   for (const c of CATALOG_ONLY) {
@@ -435,14 +450,14 @@ const ROUTE_DESCRIPTIONS = {
 };
 
 function _findTableEntry(code) {
-  return NATIONAL_TABLE.find(e => e.code === code)
-    || L2_TABLE.find(e => e.code === code)
-    || CITY_TABLE.find(e => e.code === code)
+  return _nationalTable().find(e => e.code === code)
+    || _l2Table().find(e => e.code === code)
+    || _cityTable().find(e => e.code === code)
     || null;
 }
 
 function _isNationalCode(code) {
-  return NATIONAL_TABLE.some(e => e.code === code);
+  return _nationalTable().some(e => e.code === code);
 }
 
 // classifyFn: async (text, candidatesText) => 'SP-XXX-YYY' | 'NONE' | null
@@ -463,18 +478,27 @@ async function _classifyFallback(text, classifyFn) {
 }
 
 // ── EMD 데이터 로드 (한림 + 나머지 42개 병합) ───────────────────
-let _emdRecords = null;
-
+// 2026-07-19 Phase 1 — L2/CITY/NATIONAL과 동일하게 도별 경로 레지스트리로
+// 감쌌다. 지금은 jeju 값만 있고, 캐시 키도 provinceCode로 분리해뒀다 —
+// 나중에 다른 도의 읍면동 데이터가 추가되면 이 함수 자체는 안 고치고
+// EMD_PATHS에 키만 추가하면 된다.
+const EMD_PATHS = {
+  jeju: { master: '05-emd/emd-master-data.json', extra: ['05-emd/hallim/hallim-data.json'] },
+};
+const _emdRecordsByProvince = {};
 async function _loadEmdRecords() {
-  if (_emdRecords) return _emdRecords;
-  const [masterRaw, hallimRaw] = await Promise.all([
-    _fetchText('05-emd/emd-master-data.json'),
-    _fetchText('05-emd/hallim/hallim-data.json'),
+  const provinceCode = _resolveProvinceCode();
+  if (_emdRecordsByProvince[provinceCode]) return _emdRecordsByProvince[provinceCode];
+  const paths = EMD_PATHS[provinceCode];
+  if (!paths) { _emdRecordsByProvince[provinceCode] = []; return []; }
+  const [masterRaw, ...extraRaws] = await Promise.all([
+    _fetchText(paths.master),
+    ...(paths.extra || []).map(p => _fetchText(p)),
   ]);
   const master = JSON.parse(masterRaw);
-  const hallim = JSON.parse(hallimRaw);
-  _emdRecords = [...master.읍면동목록, hallim];
-  return _emdRecords;
+  const extras = extraRaws.map(r => JSON.parse(r));
+  _emdRecordsByProvince[provinceCode] = [...master.읍면동목록, ...extras];
+  return _emdRecordsByProvince[provinceCode];
 }
 
 // ── 텍스트에서 읍면동 매칭 ──────────────────────────────────────
@@ -493,7 +517,7 @@ function _matchEmd(text, records) {
 }
 
 function _matchCity(text) {
-  for (const c of CITY_TABLE) {
+  for (const c of _cityTable()) {
     if (c.kw.some(k => text.includes(k))) return c;
   }
   return null;
@@ -532,7 +556,7 @@ function _renderEmdTemplate(template, rec) {
 }
 
 // ── 도(道) 부서 템플릿 렌더링 (2026-07-04, EMD 템플릿과 동일 패턴) ──
-// L2_TABLE 항목에 domain/도코드가 있으면 템플릿+데이터로 렌더링하고,
+// JEJU_L2_TABLE(또는 도별 테이블) 항목에 domain/도코드가 있으면 템플릿+데이터로 렌더링하고,
 // 없으면(아직 이전 안 된 나머지 12개 부서) 기존 static file을 그대로
 // fetch한다 — 한 번에 다 바꾸지 않고 부서 단위로 점진 이전하기 위함.
 let _deptMasterData = null;
@@ -564,7 +588,7 @@ function _renderDeptTemplate(template, rec) {
     .replaceAll('{DO_ROOT_SP}', 'SP-DO-000');
 }
 
-// entry: L2_TABLE(또는 국가기관 테이블) 항목. domain+도코드가 있으면
+// entry: JEJU_L2_TABLE(또는 도별 테이블)(또는 국가기관 테이블) 항목. domain+도코드가 있으면
 // 템플릿을 렌더링해 반환하고, 없으면 기존처럼 static file을 그대로 반환.
 async function _fetchDeptText(entry) {
   if (!entry.domain || !entry.도코드) return _fetchText(entry.file);
@@ -597,7 +621,7 @@ function _renderNatTemplate(template, rec) {
     .replaceAll('{대표전화}', rec.대표전화 || '');
 }
 
-// entry: NATIONAL_TABLE 항목. domain+도코드가 있으면 템플릿을 렌더링해
+// entry: JEJU_NATIONAL_TABLE(또는 도별 국가기관 테이블) 항목. domain+도코드가 있으면 템플릿을 렌더링해
 // 반환하고, 없으면 기존처럼 static file을 그대로 반환(_fetchDeptText와
 // 동일한 폴백 철학).
 async function _fetchNatText(entry) {
@@ -776,7 +800,7 @@ async function _assembleJejuSystemPromptRaw(userText, pdvLocationHint = null, cl
     || (pdvLocationHint ? _matchEmd(pdvLocationHint, emdRecords) : null);
 
   if (emdMatch) {
-    const cityCode = emdMatch.행정시명 === '제주시' ? CITY_TABLE[0] : CITY_TABLE[1];
+    const cityCode = emdMatch.행정시명 === '제주시' ? _cityTable()[0] : _cityTable()[1];
     const cityText = await _fetchCityText(cityCode);
     parts.push(cityText);
     trace.push(cityCode.code);
@@ -805,7 +829,7 @@ async function _assembleJejuSystemPromptRaw(userText, pdvLocationHint = null, cl
   }
 
   // 3) 실국 키워드 매칭 → 규칙 A: 짧은 체인
-  const divMatch = _scoreMatch(text, L2_TABLE);
+  const divMatch = _scoreMatch(text, _l2Table());
   if (divMatch) {
     const divText = await _fetchDeptText(divMatch);
     parts.push(divText);
