@@ -58,11 +58,20 @@ function _resolveProvinceCode() {
 let _kgovSp = null;
 async function _loadKgovSp() {
   if (_kgovSp) return _kgovSp;
-  const manifestRaw = await fetch(_RAW_ROOT + 'manifest.json?t=' + Math.floor(Date.now() / 3600000));
-  if (!manifestRaw.ok) throw new Error(`[Jeju] gopang manifest.json fetch 실패 (${manifestRaw.status})`);
+  // ★ 2026-07-19 긴급 수정 ★ — 여기서 fetch하던 'manifest.json'은
+  // prompts/ 밑에 존재한 적이 없다(실사 확인: raw.githubusercontent.com
+  // 실제 라이브 URL 404). 즉 이 함수는 지금까지 매 요청마다 예외를
+  // 던졌고, webapp.html의 catch가 SP_FALLBACK(한 줄짜리 최소 안내문)으로
+  // 조용히 대체해왔다 — 크래시가 안 보여서 지금까지 발견되지 않았을
+  // 뿐, 실질적으로 kgov·overlay·tree-protocol·DO-SP 전부가 로드된 적이
+  // 없었을 가능성이 높다(오늘 추가한 HUMAN-AUTHORITY-GATE-SCHEMA 포함).
+  // 올바른 파일은 prompts/sp-catalog.json(CI가 매 push마다 갱신,
+  // 실제 라이브 확인 완료) — 키 구조는 동일하다.
+  const manifestRaw = await fetch(_RAW_ROOT + 'sp-catalog.json?t=' + Math.floor(Date.now() / 3600000));
+  if (!manifestRaw.ok) throw new Error(`[Jeju] gopang sp-catalog.json fetch 실패 (${manifestRaw.status})`);
   const manifest = await manifestRaw.json();
   const fname = manifest['SP-10_kpublic'];
-  if (!fname) throw new Error('[Jeju] manifest에 SP-10_kpublic 키 없음 — kgov SP를 찾을 수 없음');
+  if (!fname) throw new Error('[Jeju] sp-catalog.json에 SP-10_kpublic 키 없음 — kgov SP를 찾을 수 없음');
   const r = await fetch(_RAW_ROOT + fname + '?t=' + Math.floor(Date.now() / 3600000));
   if (!r.ok) throw new Error(`[Jeju] kgov SP(${fname}) fetch 실패 (${r.status})`);
   _kgovSp = await r.text();

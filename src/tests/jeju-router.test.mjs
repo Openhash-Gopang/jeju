@@ -39,7 +39,7 @@ const PROVINCE_MASTER = { 도목록: [
 
 globalThis.fetch = async (url) => {
   const u = String(url);
-  if (u.includes('manifest.json')) return { ok: true, json: async () => ({ 'SP-10_kpublic': 'SP-10_kpublic_v2.2.txt' }) };
+  if (u.includes('sp-catalog.json')) return { ok: true, json: async () => ({ 'SP-10_kpublic': 'SP-10_kpublic_v2.2.txt' }) };
   if (u.endsWith('.json') || u.includes('.json?')) {
     if (u.includes('emd-master-data.json')) return { ok: true, text: async () => JSON.stringify(EMD_MASTER) };
     if (u.includes('hallim-data.json')) return { ok: true, text: async () => JSON.stringify(HALLIM_DATA) };
