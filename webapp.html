@@ -238,6 +238,57 @@ function _parsePdvRequestTag(text) {
   };
 }
 
+// ── G19(HUMAN-AUTHORITY-GATE-SCHEMA) — 외부 발급 서류 획득·전달 ────────
+// _requestPdvData()와 완전히 같은 구조(오프너에 요청 → 승인 대기 →
+// 응답)이지만, 오프너가 즉답 못 하고 사용자의 실제 파일 첨부를
+// 기다려야 하므로 타임아웃을 훨씬 길게 둔다(파일 발급·첨부에 실제
+// 시간이 걸림 — PDV 값 승인 버튼 클릭 60초와는 성격이 다르다).
+function _requestDocAcquire(docType, reason, requestingSp) {
+  return new Promise((resolve) => {
+    if (!window.opener) {
+      resolve({ approved: false, no_opener: true });
+      return;
+    }
+    const request_id = crypto.randomUUID();
+    const timer = setTimeout(() => {
+      window.removeEventListener('message', handler);
+      resolve({ approved: false, timeout: true });
+    }, 10 * 60 * 1000); // 정부24 발급·첨부 시간 고려 — 10분
+
+    function handler(e) {
+      const msg = e.data;
+      if (msg?.type !== 'GWP_DOC_RESPONSE' || msg.request_id !== request_id) return;
+      clearTimeout(timer);
+      window.removeEventListener('message', handler);
+      resolve(msg);
+    }
+    window.addEventListener('message', handler);
+
+    window.opener.postMessage({
+      type: 'GWP_DOC_REQUEST', request_id,
+      requesting_sp: requestingSp, doc_type: docType, reason,
+    }, 'https://hondi.net');
+  });
+}
+
+// SP 응답에서 [DOC_ACQUIRE_REQUEST: ...] 태그를 찾는다 — _parsePdvRequestTag와
+// 동일한 관용(request_id는 여기서 새로 발급, LLM 출력을 신뢰하지 않음).
+function _parseDocAcquireRequestTag(text) {
+  const m = text.match(/\[DOC_ACQUIRE_REQUEST:([^\]]*doc_type=[^,\]]+[^\]]*)\]/);
+  if (!m) return null;
+  const body = m[0];
+  const docTypeMatch = body.match(/doc_type=([^,\]]+)/);
+  const spMatch      = body.match(/requesting_sp=([^,\]]+)/);
+  const reasonMatch  = body.match(/reason=([^\]]+?)\]?$/);
+  if (!docTypeMatch) return null;
+  return {
+    docType: docTypeMatch[1].trim(),
+    requestingSp: spMatch ? spMatch[1].trim() : 'unknown',
+    reason: reasonMatch ? reasonMatch[1].trim() : '',
+    fullMatch: m[0],
+  };
+}
+
 // ── 사용자 식별자(guid=ipv6) 확보 ────────────────────────────────
 function _getUserGuid() {
   try {
@@ -340,6 +391,39 @@ async function _callAIRaw(messages, latestUserText) {
     text = await _govRelayCompletion(sp, followup, agency);
   }
 
+  // Step 5 연장: SP가 정부24 등 외부 서류를 요청했으면(G19) 나만의 AI 비서에게
+  // 실제 파일 첨부를 중개 요청. 파일 내용 자체는 지금 이 LLM 호출에 멀티모달로
+  // 넣지 않는다(_govRelayCompletion이 텍스트 messages만 다루는 구조라 —
+  // 문서/이미지 콘텐츠 블록 지원은 별도 작업) — 대신 세션에 누적해뒀다가
+  // G18(STAFF_REVIEW_GATE) 산출물 번들에 그대로 실어 담당부서로 넘긴다.
+  const docReq = _parseDocAcquireRequestTag(text);
+  if (docReq) {
+    const result = await _requestDocAcquire(docReq.docType, docReq.reason, docReq.requestingSp);
+    let docContext;
+    if (result.no_opener) {
+      docContext = `[DOC_ACQUIRE_RESULT: 이 세션은 GWP(나만의 AI 비서)를 거치지 않고 직접 접속됐습니다. ` +
+        `외부 서류 중개 요청 자체가 불가능합니다 — 사용자에게 ${docReq.docType}을(를) 정부24 앱 등에서 직접 발급받아 ` +
+        `담당부서에 제출하도록 안내하고, 이 세션에서는 서류 없이 진행 가능한 선까지만 답하십시오.]`;
+    } else if (result.timeout) {
+      docContext = `[DOC_ACQUIRE_RESULT: 사용자가 10분 내에 서류를 첨부하지 않았습니다(정부24 발급에 시간이 더 걸릴 수 있음). ` +
+        `서류 없이 진행 가능한 선까지만 답하고, 준비되면 다시 요청하라고 안내하십시오.]`;
+    } else if (result.reason === 'file_too_large') {
+      docContext = `[DOC_ACQUIRE_RESULT: 첨부 파일이 5MB를 초과해 거부됐습니다. 담당부서에 직접(전화·방문) 제출하도록 안내하십시오.]`;
+    } else if (!result.approved) {
+      docContext = `[DOC_ACQUIRE_RESULT: 사용자가 서류 제출을 건너뛰었습니다(doc_type=${docReq.docType}). ` +
+        `G2(사실확인 게이트)에 따라 이 서류 없이는 최종 접수로 진행하지 말고, 어디까지 준비됐는지만 안내하십시오.]`;
+    } else {
+      _acquiredDocs.push({ docType: docReq.docType, file: result.file, acquiredAt: new Date().toISOString() });
+      docContext = `[DOC_ACQUIRE_RESULT: 승인됨. 파일명: ${result.file.name} (${result.file.mime}, ${result.file.size}바이트). ` +
+        `이 서류는 세션에 확보돼 최종 담당부서 확인·승인(G18) 시 함께 전달됩니다 — 접수 진행하십시오.]`;
+    }
+    const docFollowup = [...messages,
+      { role: 'assistant', content: text },
+      { role: 'user', content: docContext },
+    ];
+    text = await _govRelayCompletion(sp, docFollowup, agency);
+  }
+
   return { text, trace };
 }
 
@@ -396,6 +480,12 @@ let mc = 0;
 // 갱신된다 — pagehide 시점에 "마지막으로 상담한 기관이 어디였는지"를
 // 알아야 하므로 모듈 스코프에 캐시해둔다.
 let _lastAgency = 'jeju_do';
+// G19(HUMAN-AUTHORITY-GATE-SCHEMA) — 이 세션 중 사용자가 GWP_DOC_RESPONSE로
+// 첨부한 외부 발급 서류 누적. GWP_DONE 보고 시 pdvData/summary와 함께 실어
+// G18(STAFF_REVIEW_GATE) 산출물 번들로 담당부서에 전달돼야 한다 — 그
+// 연결(gwp-report-client.js 쪽 페이로드 확장)은 별도 배선 필요, 여기서는
+// 세션 내 확보·누적까지만 담당한다(TODO 아님 — 의도된 범위 경계).
+let _acquiredDocs = [];
 const _gwpSessionId = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(36).slice(2));
 const _gwpSessionStartedAt = new Date().toISOString();
 
