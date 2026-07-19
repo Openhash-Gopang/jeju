@@ -115,7 +115,13 @@ html,body{height:100%;height:100dvh;overflow:hidden;
 
     </div>
 
+    <div class="attach-preview" id="attach-preview" style="display:none;align-items:center;gap:8px;padding:6px 14px;font-size:13px;color:var(--sub,#6b7280)">
+      <span id="attach-name" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>
+      <button id="attach-remove-btn" style="border:none;background:none;color:#dc2626;cursor:pointer">✕</button>
+    </div>
     <div class="chat-input-area">
+      <button class="chat-send-btn" id="mob-attach-btn" title="서류 첨부" style="margin-right:4px">📎</button>
+      <input type="file" id="mob-file-input" accept=".txt,.pdf,.docx,image/*" multiple style="display:none">
       <textarea class="chat-textarea" id="mob-input" rows="1" placeholder="무엇을 도와드릴까요?"
         oninput="autoResize(this);updateSendBtn()"
         onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();mobSend();}"></textarea>
@@ -494,16 +500,151 @@ function hideIntro() {
   if (intro) intro.style.display = 'none';
 }
 
+// ── 첨부파일 처리 (2026-07-19 포팅 — kgov §REQUIRED-DOCUMENTS가 이미
+// 전제하고 있던 "같은 대화창에 첨부하면 본문 추출돼 전달된다"는 흐름을
+// gopang의 메인 webapp.html에서 그대로 옮겨왔다. jeju 탭에는 이 기능
+// 자체가 없었다 — SP 프롬프트(kgov 상속)는 이미 이 흐름을 전제하고
+// 있었는데 클라이언트 구현이 빠져 있던 게 진짜 구멍이었다. 로직은
+// gopang과 100% 동일하게 유지한다(포맷이 어긋나면 GOV_TASK_SUBMIT_
+// REQUEST의 sha256 매칭이 깨진다).
+let _pdfjsLoaded = null;
+function _ensurePdfJs() {
+  if (_pdfjsLoaded) return _pdfjsLoaded;
+  _pdfjsLoaded = new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.min.js';
+    s.onload = () => {
+      window.pdfjsLib.GlobalWorkerOptions.workerSrc =
+        'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.js';
+      resolve();
+    };
+    s.onerror = () => reject(new Error('pdf.js 로드 실패'));
+    document.head.appendChild(s);
+  });
+  return _pdfjsLoaded;
+}
+let _mammothLoaded = null;
+function _ensureMammoth() {
+  if (_mammothLoaded) return _mammothLoaded;
+  _mammothLoaded = new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.7.0/mammoth.browser.min.js';
+    s.onload = resolve;
+    s.onerror = () => reject(new Error('mammoth.js 로드 실패'));
+    document.head.appendChild(s);
+  });
+  return _mammothLoaded;
+}
+async function _extractFileText(file) {
+  const MAX_CHARS = 20000;
+  try {
+    if (file.type === 'text/plain') return (await file.text()).slice(0, MAX_CHARS);
+    if (file.type === 'application/pdf') {
+      await _ensurePdfJs();
+      const buf = await file.arrayBuffer();
+      const pdf = await window.pdfjsLib.getDocument({ data: buf }).promise;
+      let text = '';
+      for (let i = 1; i <= pdf.numPages && text.length < MAX_CHARS; i++) {
+        const page = await pdf.getPage(i);
+        const content = await page.getTextContent();
+        text += content.items.map(it => it.str).join(' ') + '\n';
+      }
+      return text.slice(0, MAX_CHARS);
+    }
+    if (file.name.toLowerCase().endsWith('.docx')) {
+      await _ensureMammoth();
+      const buf = await file.arrayBuffer();
+      const result = await window.mammoth.extractRawText({ arrayBuffer: buf });
+      return (result.value || '').slice(0, MAX_CHARS);
+    }
+  } catch (e) {
+    console.warn('[Jeju][Attach] 본문 추출 실패:', file.name, e.message);
+    return null;
+  }
+  return null;
+}
+let _mobAttachedFiles = [];
+const _attachPreviewEl = document.getElementById('attach-preview');
+const _attachNameEl = document.getElementById('attach-name');
+function _renderAttachPreview() {
+  if (!_attachPreviewEl || !_attachNameEl) return;
+  if (!_mobAttachedFiles.length) { _attachPreviewEl.style.display = 'none'; return; }
+  const names = _mobAttachedFiles.map(f => (f.isImage ? '📷 ' : '📎 ') + f.name).join(', ');
+  _attachNameEl.textContent = _mobAttachedFiles.length > 1
+    ? `${_mobAttachedFiles.length}개 파일: ${names}` : names;
+  _attachPreviewEl.style.display = 'flex';
+}
+function _clearAttachPreview() {
+  _mobAttachedFiles = [];
+  const fi = document.getElementById('mob-file-input');
+  if (fi) fi.value = '';
+  _renderAttachPreview();
+}
+async function _addAttachedFile(file) {
+  if (!file) return;
+  const entry = { name: file.name, dataUrl: null, isImage: file.type.startsWith('image/'),
+    mimeType: file.type, sha256: null, extractedText: null, _hashPromise: null, _extractPromise: null };
+  const reader = new FileReader();
+  const dataUrlPromise = new Promise((resolve) => { reader.onload = () => { entry.dataUrl = reader.result; resolve(); }; });
+  reader.readAsDataURL(file);
+  await dataUrlPromise;
+  entry._hashPromise = file.arrayBuffer()
+    .then(buf => crypto.subtle.digest('SHA-256', buf))
+    .then(hashBuf => Array.from(new Uint8Array(hashBuf)).map(b => b.toString(16).padStart(2, '0')).join(''))
+    .then(hex => { entry.sha256 = hex; return hex; })
+    .catch(e => { console.warn('[Jeju][Attach] SHA-256 계산 실패:', e.message); return null; });
+  entry._extractPromise = entry.isImage ? Promise.resolve(null)
+    : _extractFileText(file).then(text => { entry.extractedText = text; return text; });
+  _mobAttachedFiles.push(entry);
+  _renderAttachPreview();
+}
+document.getElementById('mob-attach-btn')?.addEventListener('click', () => document.getElementById('mob-file-input')?.click());
+document.getElementById('mob-file-input')?.addEventListener('change', e => { Array.from(e.target.files || []).forEach(f => _addAttachedFile(f)); });
+document.getElementById('attach-remove-btn')?.addEventListener('click', _clearAttachPreview);
+
+// 첨부파일을 kgov §REQUIRED-DOCUMENTS/GOV_TASK_SUBMIT_REQUEST가 기대하는
+// 형식(text + image_url 블록, sha256 포함)으로 변환 — gopang과 동일 포맷.
+async function _buildUserContent(userText, files) {
+  if (!files.length) return userText;
+  await Promise.all(files.map(f => Promise.all([
+    f._hashPromise    ? f._hashPromise.catch(() => null)    : null,
+    f._extractPromise ? f._extractPromise.catch(() => null) : null,
+  ])));
+  const contentBlocks = [];
+  const textParts = [];
+  if (userText) textParts.push(userText);
+  for (const f of files) {
+    if (f.isImage) {
+      contentBlocks.push({ type: 'image_url', image_url: { url: f.dataUrl } });
+      textParts.push(f.sha256
+        ? `[첨부 이미지: "${f.name}", sha256=${f.sha256} — 정부서비스 서류 접수가 필요하면 GOV_TASK_SUBMIT_REQUEST의 documents 항목에 이 sha256을 그대로 사용하세요. 어떤 서류인지는 사진 내용과 대화 맥락으로 판단하세요.]`
+        : `[첨부 이미지: "${f.name}" — sha256 계산 실패, GOV_TASK_SUBMIT_REQUEST를 만들 수 없습니다.]`);
+    } else if (f.extractedText) {
+      textParts.push(`[첨부파일 "${f.name}" 본문 추출 결과${f.sha256 ? ` | sha256=${f.sha256}` : ''}]\n${f.extractedText}\n[본문 추출 끝 — 위 내용을 근거로 이 파일이 어떤 서류인지 직접 판단하세요${f.sha256 ? `. GOV_TASK_SUBMIT_REQUEST의 documents 항목에는 이 sha256을 사용하세요.]` : ' (sha256 계산 실패로 GOV_TASK_SUBMIT_REQUEST에는 쓸 수 없습니다).]'}`);
+    } else {
+      textParts.push(`[첨부파일: "${f.name}"${f.sha256 ? ` | sha256=${f.sha256}` : ''} — 본문 추출 실패 또는 미지원 형식. 파일명과 대화 맥락으로만 판단해야 합니다.]`);
+    }
+  }
+  const combinedText = textParts.join('\n');
+  return contentBlocks.length ? [{ type: 'text', text: combinedText }, ...contentBlocks] : combinedText;
+}
+
 async function mobSend() {
   const inp = document.getElementById('mob-input');
   const msg = inp.value.trim();
-  if (!msg) return;
+  const files = _mobAttachedFiles.slice();
+  if (!msg && !files.length) return;
   inp.value = '';
   autoResize(inp);
   updateSendBtn();
   hideIntro();
-  addMob(msg, 'user');
-  hist.push({ role:'user', content:msg });
+  const displayText = files.length
+    ? (msg ? `${msg}\n` : '') + files.map(f => (f.isImage ? '📷 ' : '📎 ') + f.name).join(', ')
+    : msg;
+  addMob(displayText, 'user');
+  const userContent = await _buildUserContent(msg, files);
+  hist.push({ role:'user', content:userContent });
+  _clearAttachPreview();
   const btn = document.getElementById('mob-send-btn');
   btn.disabled = true;
   const tid = addMob('…', 'ai');
