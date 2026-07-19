@@ -99,10 +99,21 @@ async function _loadGovCommon() {
   // JEJU-TREE-PROTOCOL(도 트리 전용 기술 프로토콜)로 대체 — 캐시 변수
   // (_govCommon)는 조합된 최종 문자열을 저장하므로 이 함수를 호출하는
   // 다른 코드는 전혀 수정할 필요가 없다(내부만 바뀜).
+  //
+  // 2026-07-19 — HUMAN-AUTHORITY-GATE-SCHEMA(G1~G19) 동적 삽입 신설.
+  // 사고실험(AC-EXPERT-PARITY-THOUGHT-EXPERIMENT_2026-07-19.md)에서
+  // 발견: 이 문서는 지금까지 "개별 SP 작성 시 §CAPABILITIES 뒤에
+  // 수동 복붙하라"는 저작 지침으로만 존재했고, 실제 ~100개 기관 SP
+  // 어디에도 반영된 적이 없었다(kgov는 인용만 함). 전문가 페르소나가
+  // SP_common_guardrails를 매 호출마다 자동 합성하는 것과 동일한
+  // 원칙을 적용 — 개별 SP 100개를 고치는 대신 여기 한 곳에서 kgov
+  // 바로 뒤에 끼워 넣는다(kgov §준수 문서가 지시한 삽입 위치 —
+  // "§CAPABILITIES 뒤" — 와 동등한 효과: 정체성/능력 정의 직후).
   if (!_govCommon) {
     const provinceCode = _resolveProvinceCode();
-    const [kgov, overlayTemplate, overlayRecords, treeProtocol] = await Promise.all([
+    const [kgov, gateSchema, overlayTemplate, overlayRecords, treeProtocol] = await Promise.all([
       _loadKgovSp(),
+      _fetchText('08-schema/HUMAN-AUTHORITY-GATE-SCHEMA_v1_4.md'),
       _fetchText('00-common/overlays/GOV-COMMON-OVERLAY-TEMPLATE_v1.1.md'),
       _loadGovCommonOverlayMasterData(),
       _loadJejuTreeProtocol(),
@@ -110,7 +121,7 @@ async function _loadGovCommon() {
     const rec = overlayRecords.find(r => r.도코드 === provinceCode);
     if (!rec) throw new Error(`[Jeju] GOV-COMMON-OVERLAY 데이터 없음(도코드=${provinceCode})`);
     const overlay = _renderGovCommonOverlay(overlayTemplate, rec);
-    _govCommon = kgov + '\n\n---\n\n' + overlay + '\n\n---\n\n' + treeProtocol;
+    _govCommon = kgov + '\n\n---\n\n' + gateSchema + '\n\n---\n\n' + overlay + '\n\n---\n\n' + treeProtocol;
   }
   return _govCommon;
 }
@@ -565,6 +576,50 @@ async function _loadDeptMasterData() {
   const raw = await _fetchText('02-do-dept/templates/do-dept-master-data.json');
   _deptMasterData = JSON.parse(raw).부서목록;
   return _deptMasterData;
+}
+
+// 2026-07-19 신설 — city-dept는 지금까지 do-dept와 달리 별도 로더가 없었다
+// (템플릿 렌더링 경로 자체가 아직 do-dept만큼 이전 안 됨). G18
+// (STAFF_REVIEW_GATE) 연락처 조회에는 필요해서 최소한으로 추가.
+let _cityDeptMasterData = null;
+async function _loadCityDeptMasterData() {
+  if (_cityDeptMasterData) return _cityDeptMasterData;
+  const raw = await _fetchText('04-city/templates/city-dept-master-data.json');
+  _cityDeptMasterData = JSON.parse(raw).국목록;
+  return _cityDeptMasterData;
+}
+
+// ── G18(STAFF_REVIEW_GATE) 연락처 조회 (2026-07-19 신설) ──────────────
+// LLM이 [STAFF_REVIEW_GATE: handler_code=...] 태그에 채워 넣는 값은
+// 도메인 코드(welfare)·부서 한글명(복지가족국)·SP 코드(SP-DO-WELFARE)
+// 중 무엇이든 될 수 있다 — 아직 이 셋을 하나로 강제하는 프롬프트 지시가
+// 없으므로(§CAPABILITIES 뒤 삽입 문구가 예시를 안 줌), 셋 다 느슨하게
+// 매칭한다. 매칭 실패 시 null — 호출부가 일반 안내 문구로 폴백해야 함.
+export async function findStaffContact(handlerCode) {
+  if (!handlerCode) return null;
+  const norm = String(handlerCode).trim().toLowerCase();
+  const hit = (...candidates) => candidates.some(c => {
+    if (!c) return false;
+    const cs = String(c).toLowerCase();
+    return norm.includes(cs) || cs.includes(norm);
+  });
+
+  const [deptRecords, cityRecords, emdRecords] = await Promise.all([
+    _loadDeptMasterData().catch(() => []),
+    _loadCityDeptMasterData().catch(() => []),
+    _loadEmdRecords().catch(() => []),
+  ]);
+
+  const dept = deptRecords.find(r => hit(r.domain, r.부서명, `SP-DO-${String(r.domain || '').toUpperCase()}`));
+  if (dept) return { name: dept.부서명, phone: dept.콜센터번호, hours: dept.콜센터운영시간 };
+
+  const city = cityRecords.find(r => hit(r.국이름, r.시이름));
+  if (city) return { name: `${city.시이름 || ''} ${city.국이름 || ''}`.trim(), phone: city.콜센터번호, hours: city.콜센터운영시간 };
+
+  const emd = emdRecords.find(r => hit(r.읍면동명));
+  if (emd) return { name: emd.읍면동명, phone: emd.대표전화, hours: emd.운영시간 };
+
+  return null;
 }
 
 function _renderDeptTemplate(template, rec) {

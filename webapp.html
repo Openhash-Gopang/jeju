@@ -133,9 +133,10 @@ html,body{height:100%;height:100dvh;overflow:hidden;
 <div class="toast" id="mob-toast"></div>
 
 <script type="module">
-import { assembleJejuSystemPrompt, resolveJejuAgency } from '/jeju-router.js';
+import { assembleJejuSystemPrompt, resolveJejuAgency, findStaffContact } from '/jeju-router.js';
 window._assembleJejuSystemPrompt = assembleJejuSystemPrompt;
 window._resolveJejuAgency = resolveJejuAgency;
+window._findStaffContact = findStaffContact;
 </script>
 
 <script>
@@ -430,6 +431,34 @@ async function _callAIRaw(messages, latestUserText) {
     text = await _govRelayCompletion(sp, docFollowup, agency);
   }
 
+  // Step 5 재연장: SP가 담당부서 확인·승인을 요청했으면(G18, 2026-07-19
+  // 조립 체인 신설과 함께 처음 소비) 연락처를 조회해 안내하고, 원문
+  // 태그가 사용자에게 그대로 노출되지 않도록 후속 호출로 마무리한다.
+  const staffReq = _parseStaffReviewGateTag(text);
+  if (staffReq) {
+    let staffContext;
+    if (staffReq.handlerType !== 'DEPARTMENT_CONTACT') {
+      // HONDI_STAFF_USER 등 향후 값 — 아직 인앱 알림 채널이 없으므로
+      // 안전하게 DEPARTMENT_CONTACT처럼 취급(연락처 안내로 폴백).
+      staffContext = `[STAFF_REVIEW_RESULT: handler_type=${staffReq.handlerType}은 아직 지원되지 않습니다 — ` +
+        `DEPARTMENT_CONTACT(담당부서 연락처 안내)로 폴백하십시오.]`;
+    } else {
+      const contact = await window._findStaffContact(staffReq.handlerCode).catch(() => null);
+      staffContext = contact
+        ? `[STAFF_REVIEW_RESULT: 담당부서 확인됨 — ${contact.name}` +
+          `${contact.phone ? `, 연락처 ${contact.phone}` : ''}${contact.hours ? `(운영 ${contact.hours})` : ''}. ` +
+          `조립된 내용은 최종 확인을 위해 이 연락처로 직접 제출·문의해야 합니다(플랫폼 밖 확인 — G18 §DEPARTMENT_CONTACT). ` +
+          `사용자에게 이 연락처를 안내하고 마무리하십시오.]`
+        : `[STAFF_REVIEW_RESULT: handler_code="${staffReq.handlerCode}"에 대응하는 담당부서 연락처를 찾지 못했습니다 — ` +
+          `일반 대표 채널(콜센터·정부24)로 안내하고, 정확한 담당부서는 확인 후 다시 알려주겠다고 밝히십시오.]`;
+    }
+    const staffFollowup = [...messages,
+      { role: 'assistant', content: text },
+      { role: 'user', content: staffContext },
+    ];
+    text = await _govRelayCompletion(sp, staffFollowup, agency);
+  }
+
   return { text, trace };
 }
 
@@ -626,6 +655,29 @@ async function _buildUserContent(userText, files) {
   }
   const combinedText = textParts.join('\n');
   return contentBlocks.length ? [{ type: 'text', text: combinedText }, ...contentBlocks] : combinedText;
+}
+
+// SP 응답에서 [STAFF_REVIEW_GATE: ...] 태그를 찾는다 (G18,
+// HUMAN-AUTHORITY-GATE-SCHEMA — 2026-07-19 조립 체인에 신설 삽입된 뒤
+// 처음 소비하는 코드). 지금 유일하게 활성화된 handler_type은
+// DEPARTMENT_CONTACT — 사람이 즉시 이 대화 안에서 확인·승인을 눌러주는
+// 구조가 아니므로, 여기서는 "담당부서 연락처를 안내하고 조립된 내용을
+// 넘겼다"는 사실만 사용자에게 보여준다(§보조 경로 없음 — G19와 달리
+// 이건 사람이 플랫폼 밖에서 하는 확인이라 응답을 기다리지 않는다).
+function _parseStaffReviewGateTag(text) {
+  const m = text.match(/\[STAFF_REVIEW_GATE:([^\]]*handler_code=[^,\]]+[^\]]*)\]/);
+  if (!m) return null;
+  const body = m[0];
+  const handlerCodeMatch = body.match(/handler_code=([^,\]]+)/);
+  const handlerTypeMatch = body.match(/handler_type=([^,\]]+)/);
+  const summaryMatch     = body.match(/summary=([^\]]+?)\]?$/);
+  if (!handlerCodeMatch) return null;
+  return {
+    handlerCode: handlerCodeMatch[1].trim(),
+    handlerType: handlerTypeMatch ? handlerTypeMatch[1].trim() : 'DEPARTMENT_CONTACT',
+    summary: summaryMatch ? summaryMatch[1].trim() : '',
+    fullMatch: m[0],
+  };
 }
 
 async function mobSend() {
