@@ -610,6 +610,30 @@ export async function findStaffContact(handlerCode) {
     _loadEmdRecords().catch(() => []),
   ]);
 
+  // 1순위 — 정확한 trace 코드 형식(resolveHandlerCodeFromTrace가 넘겨주는 값).
+  // SP-DO-{DOMAIN}: 접두어 제거 후 domain과 대소문자 무관 정확히 일치.
+  const doMatch = /^SP-DO-([A-Z]+)$/.exec(String(handlerCode).toUpperCase());
+  if (doMatch) {
+    const dept = deptRecords.find(r => String(r.domain || '').toUpperCase() === doMatch[1]);
+    if (dept) return { name: dept.부서명, phone: dept.콜센터번호, hours: dept.콜센터운영시간 };
+  }
+  // SP-EMD-{읍면동명}: 접두어 제거 후 읍면동명과 정확히 일치.
+  const emdMatch1 = /^SP-EMD-(.+)$/.exec(String(handlerCode));
+  if (emdMatch1) {
+    const emd = emdRecords.find(r => r.읍면동명 === emdMatch1[1]);
+    if (emd) return { name: emd.읍면동명, phone: emd.대표전화, hours: emd.운영시간 };
+  }
+  // SP-CITY-{JEJU|SEOGWIPO}: 시코드로 city-dept 레코드 중 아무 국이나(대표
+  // 연락처 성격) 우선 매칭 — city-dept-master-data.json은 국 단위라
+  // "시 전체 대표 연락처"가 별도로 없으면 첫 매칭 국으로 폴백.
+  const cityMatch1 = /^SP-CITY-(JEJU|SEOGWIPO)$/.exec(String(handlerCode).toUpperCase());
+  if (cityMatch1) {
+    const cityCodeMap = { JEJU: 'jejusi', SEOGWIPO: 'seogwipo' };
+    const city = cityRecords.find(r => r.시코드 === cityCodeMap[cityMatch1[1]]);
+    if (city) return { name: `${city.시이름 || ''} ${city.국이름 || ''}`.trim(), phone: city.콜센터번호, hours: city.콜센터운영시간 };
+  }
+
+  // 2순위 — LLM이 자유 서술한 값(한글 부서명 등) 대비 느슨한 매칭 폴백.
   const dept = deptRecords.find(r => hit(r.domain, r.부서명, `SP-DO-${String(r.domain || '').toUpperCase()}`));
   if (dept) return { name: dept.부서명, phone: dept.콜센터번호, hours: dept.콜센터운영시간 };
 
@@ -954,6 +978,29 @@ export function resolveJejuAgency(trace) {
   return (trace || []).includes('JEJU-NATIONAL-SP') ? 'jeju_national' : 'jeju_do';
 }
 window.resolveJejuAgency = resolveJejuAgency;
+
+// ── G18(STAFF_REVIEW_GATE) handler_code — LLM 출력이 아니라 trace에서 결정
+// (2026-07-19, 사용자 지적으로 설계 변경) ──────────────────────────────
+// 애초 계획은 "handler_code 형식을 스키마 문서에 못박는다"였다. 그런데
+// 이건 결국 LLM이 형식을 정확히 지킬 거라는 가정에 다시 기대는 것이고,
+// 이 프로젝트가 오늘만도 여러 번 겪은 "프롬프트 지시 준수 여부에 기능이
+// 좌우되는" 취약점을 하나 더 추가하는 셈이다. 라우터는 이번 턴에 어느
+// 부서/시/읍면동으로 실제 매칭했는지 trace로 이미 정확히 알고 있으므로
+// (SP-DO-WELFARE, SP-CITY-JEJU, SP-EMD-한림읍 형식 — 전부 이 파일이
+// 직접 만든 문자열), LLM의 handler_code는 "게이트를 트리거했다"는 신호로만
+// 쓰고, 실제 대상은 trace의 가장 구체적인(마지막) 노드에서 결정한다.
+// SP-DO-000/JEJU-GOV-COMMON 같은 공통 레이어 노드는 "담당자"가 아니므로
+// 건너뛰고, 실제 업무 단위(SP-DO-{domain}/SP-CITY-*/SP-EMD-*/SP-NAT-*)만
+// 후보로 삼는다.
+export function resolveHandlerCodeFromTrace(trace) {
+  if (!Array.isArray(trace)) return null;
+  for (let i = trace.length - 1; i >= 0; i--) {
+    const t = trace[i];
+    if (/^SP-(DO|CITY|EMD|NAT)-/.test(t)) return t;
+  }
+  return null;
+}
+window.resolveHandlerCodeFromTrace = resolveHandlerCodeFromTrace;
 
 export async function assembleJejuSystemPrompt(userText, pdvLocationHint = null, classifyFn = null) {
   const result = await _assembleJejuSystemPromptRaw(userText, pdvLocationHint, classifyFn);

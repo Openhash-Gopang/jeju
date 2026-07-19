@@ -133,10 +133,11 @@ html,body{height:100%;height:100dvh;overflow:hidden;
 <div class="toast" id="mob-toast"></div>
 
 <script type="module">
-import { assembleJejuSystemPrompt, resolveJejuAgency, findStaffContact } from '/jeju-router.js';
+import { assembleJejuSystemPrompt, resolveJejuAgency, findStaffContact, resolveHandlerCodeFromTrace } from '/jeju-router.js';
 window._assembleJejuSystemPrompt = assembleJejuSystemPrompt;
 window._resolveJejuAgency = resolveJejuAgency;
 window._findStaffContact = findStaffContact;
+window._resolveHandlerCodeFromTrace = resolveHandlerCodeFromTrace;
 </script>
 
 <script>
@@ -443,13 +444,18 @@ async function _callAIRaw(messages, latestUserText) {
       staffContext = `[STAFF_REVIEW_RESULT: handler_type=${staffReq.handlerType}은 아직 지원되지 않습니다 — ` +
         `DEPARTMENT_CONTACT(담당부서 연락처 안내)로 폴백하십시오.]`;
     } else {
-      const contact = await window._findStaffContact(staffReq.handlerCode).catch(() => null);
+      // 2026-07-19 수정 — LLM이 채운 staffReq.handlerCode는 신뢰하지
+      // 않는다(형식이 안 맞을 수 있음). 라우터가 이번 턴에 실제로
+      // 매칭한 trace의 가장 구체적인 노드를 대신 쓴다 — 항상 정확한
+      // 형식이 보장된다.
+      const resolvedCode = window._resolveHandlerCodeFromTrace(trace) || staffReq.handlerCode;
+      const contact = await window._findStaffContact(resolvedCode).catch(() => null);
       staffContext = contact
         ? `[STAFF_REVIEW_RESULT: 담당부서 확인됨 — ${contact.name}` +
           `${contact.phone ? `, 연락처 ${contact.phone}` : ''}${contact.hours ? `(운영 ${contact.hours})` : ''}. ` +
           `조립된 내용은 최종 확인을 위해 이 연락처로 직접 제출·문의해야 합니다(플랫폼 밖 확인 — G18 §DEPARTMENT_CONTACT). ` +
           `사용자에게 이 연락처를 안내하고 마무리하십시오.]`
-        : `[STAFF_REVIEW_RESULT: handler_code="${staffReq.handlerCode}"에 대응하는 담당부서 연락처를 찾지 못했습니다 — ` +
+        : `[STAFF_REVIEW_RESULT: handler_code="${resolvedCode}"에 대응하는 담당부서 연락처를 찾지 못했습니다 — ` +
           `일반 대표 채널(콜센터·정부24)로 안내하고, 정확한 담당부서는 확인 후 다시 알려주겠다고 밝히십시오.]`;
     }
     const staffFollowup = [...messages,
