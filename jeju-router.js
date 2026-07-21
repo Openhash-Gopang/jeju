@@ -1,13 +1,19 @@
 /**
- * jeju-router.js — jeju.hondi.net 인스턴스 셋업 (2026-07-19, 대폭 축소)
+ * jeju-router.js — jeju.hondi.net 전국 지방행정 진입점 (2026-07-21, 전국 중심 전환)
  *
- * 주피터 지시(2026-07-19): "제주는 이제 여러 광역시도 중 하나일 뿐이며,
- * 도청·시청 등 추상 클래스를 상속받아 제주도청 인스턴스를 생성하는
- * 구조여야 한다. jeju의 역할을 중앙의 상위 클래스로 이전하라."
+ * 주피터 지시(2026-07-21): "제주도는 테스트 용도였으며, 테스트가
+ * 끝났으므로 jeju 중심 아키텍처를 전국 중심으로 전환해야 한다." —
+ * window.HONDI_PROVINCE_CODE='jeju' 고정을 제거한다. 이제 gov-router.js의
+ * `_resolveProvinceCode()`가 (1) 이 오버라이드가 없으므로 (2) 사용자
+ * 발화·PDV 위치 힌트 기반 동적 판별(PROVINCE_REGISTRY, 2026-07-21)로
+ * 넘어간다 — 이 배포가 곧 "전국" 진입점이 된다. 제주 사용자는 "제주"·
+ * "홍천군"처럼 지역이 언급되거나 PDV에 거주지가 저장돼 있으면 여전히
+ * 정확히 판별되고, 판별 실패 시에도 조용히 다른 도로 오판정되지 않고
+ * "지역을 알려달라"는 정직한 안내로 처리된다.
  *
- * 실제 라우팅 로직(조립·매칭·캐싱 전부)은 이제 gopang(중앙 저장소)의
+ * 실제 라우팅 로직(조립·매칭·캐싱 전부)은 gopang(중앙 저장소)의
  * `src/gopang/gov/gov-router.js`에 있다 — 이 파일은 그 중앙 모듈을
- * 크로스오리진으로 가져와 재수출(re-export)하는 얇은 인스턴스 셋업일
+ * 크로스오리진으로 가져와 재수출(re-export)하는 얇은 진입점 셋업일
  * 뿐이다. `gwp-report-client.js`가 이미 15개 K-서비스에 쓰고 있는
  * "단일 소스 + 크로스오리진 import" 패턴과 동일하다(auth/subsystem-auth.js도
  * 같은 관행).
@@ -17,13 +23,9 @@
  * 이전됐다 — 히스토리는 git log(이 저장소의 과거 커밋)와 gopang
  * 저장소의 gov-router.js 커밋 로그 양쪽에서 추적 가능하다.
  *
- * window.HONDI_PROVINCE_CODE를 명시적으로 'jeju'로 설정한다 —
- * gov-router.js의 `_resolveProvinceCode()`는 이 값이 없으면 'jeju'를
- * 기본값으로 쓰므로(하위호환) 사실 생략해도 동작은 같지만, "이 배포는
- * jeju 인스턴스다"를 암묵적 기본값이 아니라 명시적 선언으로 남기는
- * 게 인스턴스화 원칙에 맞다 — 다른 도가 이 패턴을 그대로 복제할 때
- * (예: gyeonggi.hondi.net) 이 한 줄만 고치면 되게 하기 위함이다.
+ * 도별 전용 배포(예: gyeonggi.hondi.net)를 별도로 두고 싶다면 이 파일을
+ * 복제해 `window.HONDI_PROVINCE_CODE = '<도코드>'` 한 줄만 다시 추가하면
+ * 된다 — 그 오버라이드 우선순위는 gov-router.js에 그대로 남아있다.
  */
-window.HONDI_PROVINCE_CODE = 'jeju';
 
 export * from 'https://hondi.net/src/gopang/gov/gov-router.js';
