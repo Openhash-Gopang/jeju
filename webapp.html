@@ -133,9 +133,10 @@ html,body{height:100%;height:100dvh;overflow:hidden;
 <div class="toast" id="mob-toast"></div>
 
 <script type="module">
-import { assembleGovSystemPrompt as assembleJejuSystemPrompt, resolveGovAgency as resolveJejuAgency, findStaffContact, resolveHandlerCodeFromTrace } from '/jeju-router.js';
+import { assembleGovSystemPrompt as assembleJejuSystemPrompt, resolveGovAgency as resolveJejuAgency, resolveProvinceCode as resolveJejuProvinceCode, findStaffContact, resolveHandlerCodeFromTrace } from '/jeju-router.js';
 window._assembleJejuSystemPrompt = assembleJejuSystemPrompt;
 window._resolveJejuAgency = resolveJejuAgency;
+window._resolveJejuProvinceCode = resolveJejuProvinceCode;
 window._findStaffContact = findStaffContact;
 window._resolveHandlerCodeFromTrace = resolveHandlerCodeFromTrace;
 </script>
@@ -313,18 +314,20 @@ function _getUserGuid() {
 // (클라이언트가 빠뜨리거나 조작 불가 — SP-COMMON-05 H2), 이제부터 sp
 // 변수는 "JEJU-GOV-COMMON 이하"만 담당하고 agencyPrompt로 전달한다.
 // agency는 jeju-router.js의 resolveJejuAgency(trace)가 국가기관/도청
-// 트리 중 실제로 어느 쪽이 선택됐는지에 따라 'jeju_national'|'jeju_do'로
+// 트리 중 실제로 어느 쪽이 선택됐는지에 따라 'gov_national'|'gov_do'로
 // 정해준다 — worker.js의 GOV_AGENCIES/SP_DELEGATION_REGISTRY 키와 반드시
-// 동일해야 한다(어긋나면 UNKNOWN_AGENCY로 조용히 거부됨).
-// jeju_do/jeju_national은 SP_DELEGATION_ORIGINATORS(위임 시작 가능)라
+// 동일해야 한다(어긋나면 UNKNOWN_AGENCY로 조용히 거부됨). provinceCode도
+// 함께 실어 보내야 worker.js가 도별 동적 위임 렌더링을 할 수 있다
+// (2026-07-21 신설).
+// gov_do/gov_national은 SP_DELEGATION_ORIGINATORS(위임 시작 가능)라
 // 서버가 stream을 강제로 끄므로 여기서도 stream:false로 요청한다.
-async function _govRelayCompletion(agencyPrompt, messages, agency) {
+async function _govRelayCompletion(agencyPrompt, messages, agency, provinceCode = null) {
   const guid = _getUserGuid();
   try {
     const r = await fetch(`${PROXY}/gov/relay`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ guid, agency, agencyPrompt, messages, max_tokens: 2000, stream: false, tier: 'gov-flash' }),
+      body: JSON.stringify({ guid, agency, agencyPrompt, messages, provinceCode, max_tokens: 2000, stream: false, tier: 'gov-flash' }),
     });
     if (!r.ok) {
       const errBody = await r.json().catch(() => ({}));
@@ -354,7 +357,7 @@ async function _govRelayCompletion(agencyPrompt, messages, agency) {
 
 // ── AI 호출(원본) — 라우터로 SP 동적 조립 + PDV 중개(§13) 2단계 흐름 ──
 async function _callAIRaw(messages, latestUserText) {
-  let sp = SP_FALLBACK, trace = [], agency = 'jeju_do';
+  let sp = SP_FALLBACK, trace = [], agency = 'gov_do', provinceCode = null;
   try {
     const gps = await _detectGpsLocation();
     // 우선순위: ① GPS 실시간 감지(가장 정확, 매 턴 재검증)
@@ -365,6 +368,7 @@ async function _callAIRaw(messages, latestUserText) {
     sp = r.systemPrompt;
     trace = r.trace;
     agency = window._resolveJejuAgency(trace);
+    provinceCode = window._resolveJejuProvinceCode ? window._resolveJejuProvinceCode() : null;
     _lastAgency = agency;
   } catch (e) {
     console.warn('[Jeju] SP 조립 실패, 폴백 사용:', e.message);
@@ -372,7 +376,7 @@ async function _callAIRaw(messages, latestUserText) {
   document.getElementById('trace-badge').textContent = trace.join(' > ');
   document.getElementById('trace-badge').style.display = trace.length ? 'inline-block' : 'none';
 
-  let text = await _govRelayCompletion(sp, messages, agency);
+  let text = await _govRelayCompletion(sp, messages, agency, provinceCode);
 
   // Step 5 연장: SP가 PDV 필드를 요청했으면 나만의 AI 비서에게 중개 요청
   const pdvReq = _parsePdvRequestTag(text);
@@ -396,7 +400,7 @@ async function _callAIRaw(messages, latestUserText) {
       { role: 'assistant', content: text },
       { role: 'user', content: pdvContext },
     ];
-    text = await _govRelayCompletion(sp, followup, agency);
+    text = await _govRelayCompletion(sp, followup, agency, provinceCode);
   }
 
   // Step 5 연장: SP가 정부24 등 외부 서류를 요청했으면(G19) 나만의 AI 비서에게
@@ -520,7 +524,7 @@ let mc = 0;
 // _lastAgency는 _callAIRaw()가 매 턴 jeju-router.js로 재계산할 때마다
 // 갱신된다 — pagehide 시점에 "마지막으로 상담한 기관이 어디였는지"를
 // 알아야 하므로 모듈 스코프에 캐시해둔다.
-let _lastAgency = 'jeju_do';
+let _lastAgency = 'gov_do';
 // G19(HUMAN-AUTHORITY-GATE-SCHEMA) — 이 세션 중 사용자가 GWP_DOC_RESPONSE로
 // 첨부한 외부 발급 서류(보조 경로) 누적. pagehide 시 GWP_DONE의
 // attachedDocs로 실려 G18(STAFF_REVIEW_GATE) 산출물 번들 메타데이터로
@@ -866,7 +870,7 @@ window.addEventListener('pagehide', () => {
   if (!window.opener || !hist.length) return;
   import('https://hondi.net/src/gopang/gwp/gwp-report-client.js')
     .then(({ reportGwpSessionEnd }) => reportGwpSessionEnd({
-      agencyId: _lastAgency || 'jeju_do',
+      agencyId: _lastAgency || 'gov_do',
       guid: _getUserGuid(),
       messages: hist,
       resultText: hist[hist.length - 1]?.content || '',
