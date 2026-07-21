@@ -356,7 +356,7 @@ async function _govRelayCompletion(agencyPrompt, messages, agency, provinceCode 
 }
 
 // ── AI 호출(원본) — 라우터로 SP 동적 조립 + PDV 중개(§13) 2단계 흐름 ──
-async function _callAIRaw(messages, latestUserText) {
+async function _callAIRaw(messages, latestUserText, onProgress) {
   let sp = SP_FALLBACK, trace = [], agency = 'gov_do', provinceCode = null;
   try {
     const gps = await _detectGpsLocation();
@@ -364,7 +364,11 @@ async function _callAIRaw(messages, latestUserText) {
     //         ② GWP facts로 넘어온 위치(메인 비서 쪽 GPS/주소 — 오리진 문제 우회)
     //         ③ 기존 PDV 힌트(교차 오리진이라 실질적으로 항상 null)
     const locationHint = gps?.emdName || _urlFactsLocation || _pdvLocationHint();
-    const r = await window._assembleJejuSystemPrompt(latestUserText, locationHint);
+    // onProgress(2026-07-21 신설) — 시군구 리졸버가 SSE로 매초 진행상황을
+    // 보내면 assembleGovSystemPrompt의 4번째 인자(onProgress)로 그대로
+    // 전달돼, mobSend()의 임시 말풍선을 실시간으로 갱신한다. 3번째
+    // 인자(classifyFn)는 이 배포에서 안 쓰므로 null 명시.
+    const r = await window._assembleJejuSystemPrompt(latestUserText, locationHint, null, onProgress);
     sp = r.systemPrompt;
     trace = r.trace;
     agency = window._resolveJejuAgency(trace);
@@ -477,8 +481,8 @@ async function _callAIRaw(messages, latestUserText) {
 // (assembleJejuSystemPrompt)가 §13b 자리표시자에 이미 정확히 치환해뒀으므로
 // (SP_CODE_TO_PDV_SCOPE 참조), 여기서는 그 값을 그대로 신뢰해 태그를
 // 파싱·조회하기만 하면 된다.
-async function callAI(messages, latestUserText) {
-  const raw = await _callAIRaw(messages, latestUserText);
+async function callAI(messages, latestUserText, onProgress) {
+  const raw = await _callAIRaw(messages, latestUserText, onProgress);
   if (!window.PdvHistoryClient || !/\[PDV(?:_HISTORY)?_REQUEST:/.test(raw.text)) return raw;
 
   let ipv6 = 'anonymous';
@@ -507,7 +511,7 @@ async function callAI(messages, latestUserText) {
     { role: 'assistant', content: cleaned || '(이전 기록을 조회하겠습니다)' },
     { role: 'user', content: `[시스템: PDV 조회 결과]\n${summaryText}\n\n위 조회 결과를 반영해서 답변을 이어가 주세요.` },
   ];
-  return _callAIRaw(followUp, latestUserText);
+  return _callAIRaw(followUp, latestUserText, onProgress);
 }
 
 // ── UI 헬퍼 ───────────────────────────────────────────────────
@@ -709,8 +713,16 @@ async function mobSend() {
   const btn = document.getElementById('mob-send-btn');
   btn.disabled = true;
   const tid = addMob('…', 'ai');
+  // onProgress(2026-07-21 신설) — 새 말풍선을 만들지 않고 이미 있는
+  // 임시 말풍선(tid)의 내용을 진행상황 텍스트로 갱신한다. 최종 답이
+  // 오면 어차피 이 요소를 지우고(remove) 새로 addMob하므로, 그 전까지
+  // 잠깐 보여주는 용도로만 쓰인다.
+  const onProgress = (p) => {
+    const el = document.getElementById(tid);
+    if (el && p?.message) el.innerHTML = String(p.message).replace(/\n/g, '<br>');
+  };
   try {
-    const { text, trace } = await callAI(hist.slice(-10), msg);
+    const { text, trace } = await callAI(hist.slice(-10), msg, onProgress);
     document.getElementById(tid)?.remove();
     addMob(text, 'ai');
     if (trace?.length) addTrace(trace.join(' → '));
