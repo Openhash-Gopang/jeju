@@ -856,8 +856,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (back.granted && back.resumeContext?.messages) {
     addMob('동의 확인했습니다. 이전 기록을 반영해서 이어가겠습니다...', 'ai');
     const tid = addMob('…', 'ai');
+    const onProgress = (p) => {
+      const el = document.getElementById(tid);
+      if (el && p?.message) el.innerHTML = String(p.message).replace(/\n/g, '<br>');
+    };
     try {
-      const { text, trace } = await callAI(back.resumeContext.messages, back.resumeContext.latestUserText);
+      const { text, trace } = await callAI(back.resumeContext.messages, back.resumeContext.latestUserText, onProgress);
       document.getElementById(tid)?.remove();
       addMob(text, 'ai');
       if (trace?.length) addTrace(trace.join(' → '));
