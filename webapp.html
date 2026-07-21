@@ -169,17 +169,22 @@ async function _detectGpsLocation() {
     const d = await r.json();
     const doc = d.documents?.[0];
     if (!doc) return null;
+    const region1 = doc.road_address?.region_1depth_name || doc.address?.region_1depth_name;
     const region2 = doc.road_address?.region_2depth_name || doc.address?.region_2depth_name;
     const region3 = doc.road_address?.region_3depth_name
       || (doc.address?.region_3depth_name || '').split(' ')[0];
-    // 제주 밖이면(다른 지역에서 접속) 위치 힌트를 쓰지 않는다 — 관할 오매칭 방지.
-    if (!region2 || !['제주시', '서귀포시'].includes(region2) || !region3) {
-      console.log('[Jeju] GPS 위치가 제주 관할 밖 — 힌트 미사용:', region2 || '(확인 안 됨)');
-      return null;
-    }
-    _gpsEmdCache = { emdName: region3, city: region2 };
-    console.log('[Jeju] GPS 위치 감지:', region3);
-    toast(`현재 위치: ${region3}`);
+    if (!region1) return null;
+    // ★ 2026-07-21 수정 — "제주 밖이면 버림" 필터 제거. jeju-router.js는
+    // 이미 전국 동적 판별 진입점으로 전환됐는데(#2) 이 함수만 옛 필터가
+    // 남아 있어서 실제로는 제주 밖 GPS 좌표가 여전히 무시되고 있었다.
+    // emdName에 도(광역)까지 포함한 전체 주소 문자열을 담아, 도 판별
+    // (_guessProvinceFromText)까지 이 값 하나로 가능하게 한다 — 호출부
+    // (_callAIRaw)는 gps?.emdName을 그대로 쓰므로 코드 변경 없이도
+    // 자동으로 전국 대응된다.
+    const fullHint = [region1, region2, region3].filter(Boolean).join(' ');
+    _gpsEmdCache = { emdName: fullHint, city: region2, province: region1 };
+    console.log('[Jeju] GPS 위치 감지:', fullHint);
+    toast(`현재 위치: ${region3 || region2 || region1}`);
     return _gpsEmdCache;
   } catch (e) {
     console.warn('[Jeju] GPS 위치 확인 실패(권한 거부·타임아웃 등):', e.message);
