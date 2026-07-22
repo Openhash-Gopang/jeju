@@ -834,7 +834,12 @@ let _urlFactsLocation = null;
         ? decodeURIComponent(escape(atob(ctxRaw)))
         : decodeURIComponent(ctxRaw))
     : null;
-  if (ctx) setTimeout(() => qs(ctx), 300);
+  // ★ 2026-07-21 신설 — 이 ctx는 AI 비서(AC)가 전달한 맥락인데,
+  // 지금까지는 사용자가 이 탭에서 방금 직접 입력한 것처럼 아무 표시
+  // 없이 그대로 전송했다 — 사용자가 "내가 AI 비서한테 한 말이 여기
+  // 또 나온다"고 혼란스러워한 실사 지적으로 발견. klaw.hondi.net의
+  // "(AI 비서로부터 전달됨)" 표시와 동일하게 맞춘다.
+  if (ctx) setTimeout(() => qs('(AI 비서로부터 전달됨)\n' + ctx), 300);
 })();
 </script>
 
