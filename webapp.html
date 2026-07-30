@@ -362,13 +362,13 @@ async function _govRelayCompletion(agencyPrompt, messages, agency, provinceCode 
 
 // ── AI 호출(원본) — 라우터로 SP 동적 조립 + PDV 중개(§13) 2단계 흐름 ──
 async function _callAIRaw(messages, latestUserText, onProgress) {
-  let sp = SP_FALLBACK, trace = [], agency = 'gov_do', provinceCode = null;
+  let sp = SP_FALLBACK, trace = [], agency = 'gov_do', provinceCode = null, locationHint = null;
   try {
     const gps = await _detectGpsLocation();
     // 우선순위: ① GPS 실시간 감지(가장 정확, 매 턴 재검증)
     //         ② GWP facts로 넘어온 위치(메인 비서 쪽 GPS/주소 — 오리진 문제 우회)
     //         ③ 기존 PDV 힌트(교차 오리진이라 실질적으로 항상 null)
-    const locationHint = gps?.emdName || _urlFactsLocation || _pdvLocationHint();
+    locationHint = gps?.emdName || _urlFactsLocation || _pdvLocationHint();
     // onProgress(2026-07-21 신설) — 시군구 리졸버가 SSE로 매초 진행상황을
     // 보내면 assembleGovSystemPrompt의 4번째 인자(onProgress)로 그대로
     // 전달돼, mobSend()의 임시 말풍선을 실시간으로 갱신한다. 3번째
