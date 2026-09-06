@@ -11,7 +11,13 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pretendard:wght@400;500;600;700;800&display=swap">
 <script src="https://cdn.jsdelivr.net/gh/Openhash-Gopang/gopang@main/gopang-wallet.js"></script>
 <script src="/pdv-history-client.js"></script>
-<script type="module" src="https://hondi.net/auth/subsystem-auth.js"></script>
+<!-- K-서비스 공용 전화번호 인증 모듈(2026-09-07 부착) — 구 고팡 지갑 SSO
+     (subsystem-auth.js, 크로스 도메인 릴레이 버그로 고장난 상태였음)는
+     전수 폐기 — 이 공용 모듈 단독 체제로 전환됨. -->
+<script>
+window.K_AUTH_CONFIG = { serviceLabel: '제주도청 AI' };
+</script>
+<script src="https://hondi.net/auth/k-service-auth-client.js"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%;height:100dvh;overflow:hidden;
